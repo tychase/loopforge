@@ -26,10 +26,14 @@ Generated Game Variant JSON
 
 The frontend should include:
 
-- playable game canvas
+- lightweight canvas game view, currently pseudo-FPV and later sprite billboard capable
 - score display
 - timer
 - upgrade selection
+- judge chaser roster and barks
+- judge health/combat UI for shard-blast fighting
+- lightweight minimap/radar if it improves clarity
+- local/bot fallback mode that works without network access
 - agent lab panel
 - current research hypothesis
 - post-run summary
@@ -43,6 +47,35 @@ The backend should include:
 - endpoint to save playtest result
 - endpoint to retrieve current best variant
 - simple storage for generated configs
+- later: lightweight leaderboard with optional display names, score validation, and rate limits
+- later: global judge-learning state, scoped per arena season or per global boss cycle
+- later: real-time multiplayer/open-arena server, while preserving local/bot fallback
+
+## Judge Learning Data Model
+
+Keep this deterministic and cheap. Store small JSON blobs, not model weights. First implement this as local per-match state; later persist and merge global state carefully.
+
+```json
+{
+  "judge_id": "levelsio",
+  "level": 3,
+  "experience": 42,
+  "defeats": 5,
+  "behavior_weights": {
+    "chase": 1.1,
+    "guard_shards": 0.25,
+    "zig_zag": 0.15,
+    "retreat_when_hurt": 0.1
+  },
+  "last_defeat": {
+    "damage_source": "shard_blast",
+    "distance": 420,
+    "time_alive_seconds": 36
+  }
+}
+```
+
+On respawn, update at most one or two weights by a small bounded delta. This gives the feeling of learning without risking unfair or incomprehensible AI.
 
 ## Hermes Agent Workflow
 
