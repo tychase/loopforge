@@ -46,6 +46,280 @@ canvas {
 
 canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
 
+.threeStage {
+  position: relative;
+  width: 100%;
+  height: min(92vh, calc((100vw - 32px) * 0.625), 720px);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #07111f;
+  outline: none;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.threeStage canvas {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+}
+
+.threeStage:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
+
+.gameHud {
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  color: #f7f2dc;
+  font-weight: 800;
+}
+
+.runStats,
+.bossPanel,
+.threatPanel,
+.miniMap,
+.hudNotice {
+  border: 1px solid rgba(125, 249, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(3, 4, 10, 0.7);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.runStats {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: min(360px, calc(100% - 36px));
+  padding: 12px 14px;
+}
+
+.runStats > strong {
+  display: block;
+  color: #7df9ff;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+
+.runStats dl {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+  margin: 8px 0 0;
+}
+
+.runStats div,
+.runStats dt,
+.runStats dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.runStats dt {
+  color: #92a0bf;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.runStats dd {
+  color: #f7f2dc;
+  font-size: 16px;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bossPanel {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: min(430px, calc(100% - 420px));
+  min-width: 300px;
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  border-color: color-mix(in srgb, var(--judge-color) 70%, transparent);
+}
+
+.bossPanel div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bossPanel strong {
+  color: var(--judge-color);
+  font-size: 15px;
+}
+
+.bossPanel span,
+.bossPanel small {
+  color: #b9c3df;
+  font-size: 12px;
+}
+
+.bossPanel small {
+  display: block;
+  margin-top: 3px;
+}
+
+.bossHealth {
+  height: 10px;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.bossHealth span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--judge-color), #9cff8f);
+}
+
+.threatPanel {
+  position: absolute;
+  top: 104px;
+  left: 18px;
+  width: min(318px, calc(100% - 36px));
+  padding: 13px 16px;
+  border-color: color-mix(in srgb, var(--judge-color) 72%, transparent);
+}
+
+.threatPanel strong,
+.threatPanel span {
+  display: block;
+}
+
+.threatPanel strong {
+  color: #f7f2dc;
+  font-size: 15px;
+}
+
+.threatPanel span {
+  margin-top: 4px;
+  color: #b9c3df;
+  font-size: 13px;
+}
+
+.threatPanel-danger {
+  background: color-mix(in srgb, var(--judge-color) 58%, rgba(3, 4, 10, 0.82));
+}
+
+.threatPanel-danger span { color: #03040a; }
+
+.miniMap {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 118px;
+  height: 118px;
+  overflow: hidden;
+}
+
+.miniMap::before {
+  content: "";
+  position: absolute;
+  inset: 25%;
+  border: 1px solid rgba(125, 249, 255, 0.18);
+  background: rgba(125, 249, 255, 0.06);
+}
+
+.miniShard,
+.miniJudge,
+.miniPortal,
+.miniPlayer {
+  position: absolute;
+  display: block;
+  transform: translate(-50%, -50%);
+}
+
+.miniShard {
+  width: 4px;
+  height: 4px;
+  background: #7df9ff;
+  box-shadow: 0 0 8px #7df9ff;
+}
+
+.miniJudge {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--judge-color);
+  box-shadow: 0 0 10px var(--judge-color);
+}
+
+.miniJudge-defeated {
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+
+.miniPortal {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--portal-color);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--portal-color);
+}
+
+.miniPortal-return {
+  width: 10px;
+  height: 10px;
+}
+
+.miniPlayer {
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 12px solid #f7f2dc;
+  transform-origin: center;
+  filter: drop-shadow(0 0 7px #7df9ff);
+}
+
+.noticeStack {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  display: grid;
+  gap: 8px;
+  width: min(500px, calc(100% - 36px));
+}
+
+.hudNotice {
+  position: relative;
+  padding: 12px 14px 12px 20px;
+  border-color: color-mix(in srgb, var(--notice-color) 72%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--notice-color) 22%, transparent);
+}
+
+.hudNotice::before {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: calc(100% - 16px);
+  margin-left: -12px;
+  border-radius: 4px;
+  background: var(--notice-color);
+}
+
+.hudNotice strong,
+.hudNotice span {
+  display: block;
+}
+
+.hudNotice strong {
+  color: #f7f2dc;
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.hudNotice span {
+  margin-top: 3px;
+  color: #b9c3df;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .overlay {
   position: absolute;
   inset: 8px;
@@ -256,13 +530,33 @@ canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
     font-size: 36px;
   }
 
-  canvas {
+  canvas,
+  .threeStage {
     height: min(94vh, calc((100vw - 24px) * 0.625), 720px);
+  }
+
+  .bossPanel {
+    top: auto;
+    right: 18px;
+    bottom: 18px;
+    left: auto;
+    width: min(340px, calc(100% - 36px));
+    min-width: 0;
+    transform: none;
+  }
+
+  .noticeStack {
+    bottom: 98px;
   }
 }
 
 @media (max-height: 650px) {
-  canvas {
+  canvas,
+  .threeStage {
     height: min(96vh, calc((100vw - 24px) * 0.625), 720px);
+  }
+
+  .noticeStack {
+    display: none;
   }
 }

@@ -12,7 +12,7 @@ This document is now historical planning context. The current primary docs are:
 
 Major progress since this roadmap was written:
 
-- The game moved from pseudo-FPV toward a 2.5D camera-follow arena.
+- The game moved from pseudo-FPV toward a staged ThreeJS camera-follow arena.
 - Judge config, shard-blast combat, health, defeat, respawn, local learning, upgrade choices, and threat feedback are implemented.
 - Render helpers now live under `src/game/render/`.
 - The current strategic direction is to keep mechanics good enough for flow and spend most near-term effort on professional visuals, juice, arena polish, and judge references.
@@ -23,7 +23,7 @@ Use the phase list below only as background, not as the active task order.
 
 **Architecture:** Keep the shipped game lightweight and instant-loading. Build mechanics locally first in typed TypeScript modules, then add assets as small sprite billboards, then add server features only after the single-player/bot loop is fun. Judge learning should be deterministic, bounded, and local per-match first; global learning can come later.
 
-**Tech Stack:** Vite 5, React 18, TypeScript, Vitest, HTML canvas. Optional later backend TBD; real-time multiplayer is a long-term target, not a dependency for the local game.
+**Tech Stack:** Vite 5, React 18, TypeScript, Vitest, ThreeJS renderer layer. Optional later backend TBD; real-time multiplayer is a long-term target, not a dependency for the local game.
 
 ---
 

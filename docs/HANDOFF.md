@@ -4,16 +4,18 @@ Last updated: 2026-05-01
 
 ## One-Sentence State
 
-LoopForge is now a playable Vite 5 + React 18 + TypeScript browser arcade arena: move through a 2.5D projected lab floor, collect shards, avoid judge chasers, fire shard blasts, survive waves, pick upgrades, and watch judges take damage, respawn, and adapt locally within the match.
+LoopForge is now a playable Vite 5 + React 18 + TypeScript + ThreeJS browser arcade arena: move through a 3D neon lab floor, collect shards, avoid judge chasers, fire shard blasts, survive waves, pick upgrades, and watch judges take damage, respawn, and adapt locally within the match.
 
 ## Current Workspace
 
 - Repo on this machine: `D:\hermes-arcade\loopforge`
-- Dev server currently verified on: `http://127.0.0.1:5173`
+- Dev server currently verified on: `http://127.0.0.1:5180`
 - Main app: `src/App.tsx`
+- ThreeJS renderer: `src/ThreeCanvas.tsx`
+- React HUD overlay: `src/GameHud.tsx`
 - Simulation: `src/game.ts`
 - Judge config: `src/characters.ts`
-- Render helpers: `src/game/render/`
+- Legacy 2.5D render helpers: `src/game/render/`
 - Tests: `src/game.test.ts`, `src/game/monsterAssets.test.ts`, `src/game/render/projection.test.ts`
 
 ## Verification Status
@@ -27,9 +29,9 @@ npm run build
 
 Results:
 
-- `npm test`: 32 tests passed
-- `npm run build`: passed
-- Browser smoke: `http://127.0.0.1:5173` loaded, start button worked, player movement worked, canvas click fired a shard blast, no Vite overlay, no runtime errors.
+- `npm test`: 35 tests passed
+- `npm run build`: passed; Vite reports the expected large chunk warning after adding ThreeJS (`~190.8 kB` gzip JS)
+- Browser smoke: `http://127.0.0.1:5180` loaded, start button worked, player movement worked, ThreeJS canvas rendered, Vibe Jam widget remained visible, no Vite overlay, no console errors or warnings.
 
 ## Important Worktree Note
 
@@ -41,6 +43,8 @@ Known active areas include:
 - `src/game.ts`
 - `src/game.test.ts`
 - `src/characters.ts`
+- `src/ThreeCanvas.tsx`
+- `src/GameHud.tsx`
 - `src/game/render/`
 - `public/assets/`
 - `docs/`
@@ -61,7 +65,7 @@ Mechanics should be "just good enough" to support replay, clarity, and flow:
 
 Once those are stable, most effort should go into:
 
-- stronger 2.5D arena presentation
+- stronger ThreeJS arena presentation
 - judge character identity
 - sprite/billboard polish
 - particles and screen feedback
@@ -78,7 +82,7 @@ Core loop:
 - Player collects shards for score.
 - Shard pickups use the player's collision radius and magnet radius.
 - Space/click fires shard blasts.
-- Blasts auto-lock toward the nearest active judge.
+- Mouse cursor aims shard blasts; movement does not change aim.
 - Waves end by timer or shard clear.
 - Upgrade choice starts the next wave.
 
@@ -92,25 +96,23 @@ Judges:
 
 Rendering:
 
-- The game now uses a 2.5D camera-follow arena, not the older pseudo-FPV tunnel direction.
-- `src/game/render/camera.ts` computes the camera-follow world view.
-- `src/game/render/projection.ts` maps 2D world coordinates into angled screen coordinates.
-- The arena draws a compressed perspective-style grid and projected boundary lines.
-- Entities use Y-based scale, elliptical shadows, and screen-Y render sorting.
-- Judge and player presentation is billboard-style.
-- UI remains separate from transformed world rendering.
+- The game now uses a staged ThreeJS camera-follow arena, not the older canvas-only renderer.
+- `src/ThreeCanvas.tsx` reads the existing `GameState` snapshot and renders the arena as a 3D floor plane/grid.
+- Player, shards, blasts, portals, and judges render as simple 3D objects and billboards.
+- The camera follows from an angled third-person/top-down perspective.
+- Lighting, emissive materials, additive glow meshes, and fake shadows provide the current 3D look without postprocessing or large assets.
+- `src/GameHud.tsx` keeps score, wave, clock, boss health, minimap, threat, and notice UI in React overlays.
+- `src/game.ts` remains the simulation source of truth.
 - Shard pickups now create shard-to-player trails, small burst particles, score popups, magnet preview tethers, and a combo/streak HUD readout.
-- The arena includes a canvas-drawn `Vibe Jam Portal` exit portal.
+- The arena includes a ThreeJS-rendered `Vibe Jam Portal` exit portal.
 - Portal arrivals with `?portal=true` skip the start overlay, spawn the player into the arena, and create a nearby return portal when `ref` is present.
-- The page chrome above and below the arena has been removed. Essential run stats now render inside the canvas HUD so the arena is the first meaningful viewport.
+- The page chrome above and below the arena has been removed. Essential run stats now render as React overlays on top of the ThreeJS scene so the arena is the first meaningful viewport.
 
 Threat feedback:
 
-- Nearest judge targeting line.
-- Player proximity warning rings after grace.
-- Judge threat aura and lunge pulse when close.
-- Offscreen edge arrows for judges outside the camera view.
-- Screen-edge pulse when danger is high.
+- Nearest-judge threat panel.
+- Grace ring, judge aura, boss health, minimap, and notice overlays.
+- React HUD stays separate from the ThreeJS world render.
 
 ## Strategic Priority
 
@@ -125,7 +127,7 @@ The next feature patches should stay small and high-impact:
 
 Avoid for now:
 
-- full Three.js rewrite
+- gameplay rewrites beyond the staged ThreeJS renderer
 - real multiplayer
 - inventory systems
 - rooms/buildings/pathfinding
@@ -135,7 +137,7 @@ Avoid for now:
 
 ## Recent Patch
 
-Shard collection juice, upgrade moment polish, and Vibe Jam portal support are implemented.
+Shard collection juice, upgrade moment polish, Vibe Jam portal support, and the initial ThreeJS arena renderer layer are implemented.
 
 Added:
 
@@ -149,7 +151,7 @@ Added:
 - exit portal collision for `https://vibej.am/portal/2026`
 - portal arrival support for `?portal=true`
 - return portal support when a `ref` query parameter exists
-- arena-first layout with compact in-canvas score/wave/clock/blast/combo HUD
+- arena-first ThreeJS scene with React score/wave/clock/blast/combo HUD
 - focused test coverage for exit/return portal triggers
 
 ## Next Recommended Patch
@@ -188,11 +190,17 @@ The core reward, upgrade, and portal loops now exist. The fastest route to "impr
 Use this in the next chat:
 
 ```text
-We are working on LoopForge at D:\hermes-arcade\loopforge. Please read docs/HANDOFF.md and docs/CURRENT_DIRECTION.md first. Then run git status --short, npm test, and npm run build. Continue with the next recommended patch unless I specify otherwise.
+We are working on LoopForge at D:\hermes-arcade\loopforge. Please read docs/HANDOFF.md, docs/CURRENT_DIRECTION.md, and docs/art-direction.md first. Then run git status --short, npm test, and npm run build. The project is now classified as ThreeJS, but this is a staged migration: keep React UI overlays and keep src/game.ts as the simulation source of truth. Continue with the next recommended patch unless I specify otherwise.
 ```
 
 If the dev server is not already running:
 
 ```bash
-npm run dev -- --host 0.0.0.0 --host 127.0.0.1 --port 5173
+npm run dev -- --host 0.0.0.0 --host 127.0.0.1 --port 5180
 ```
+
+Suggested next steps for the next chat:
+
+1. Tighten the ThreeJS camera framing so the player stays comfortably inside the first viewport while moving in all directions.
+2. Add lightweight ThreeJS arena staging: animated rail lights, better portal glow, corner machinery silhouettes, and subtle lab particles.
+3. Run a submission pass: mobile-ish viewport smoke, portal handoff smoke, widget visibility, console errors, bundle size note, and final deploy readiness.

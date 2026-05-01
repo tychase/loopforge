@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import './styles.css';
+import { GameHud } from './GameHud';
+import { ThreeCanvas } from './ThreeCanvas';
 import { JUDGE_CHASERS, selectJudgeSprite, type CharacterAnimation } from './characters';
 import {
   DEFAULT_VARIANT,
+  aimPlayerAtCursor,
   applyUpgradeAndStartNextWave,
   chooseUpgradeOptions,
   createInitialState,
@@ -1578,7 +1581,6 @@ function draw(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 export default function App() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const portalContext = useMemo(() => readPortalQueryContext(), []);
   const initialState = useMemo(
     () => createInitialState(DEFAULT_VARIANT, {
@@ -1628,8 +1630,6 @@ export default function App() {
         window.location.assign(buildPortalRedirect(portalTrigger, portalContext, state));
         return;
       }
-      const ctx = canvasRef.current?.getContext('2d');
-      if (ctx) draw(ctx, state);
       setSnapshot(snapshotState(state));
       frame = requestAnimationFrame(loop);
     };
@@ -1654,7 +1654,6 @@ export default function App() {
   };
 
   const handlePointerDown = () => {
-    canvasRef.current?.focus();
     if (stateRef.current.status === 'ready') {
       startGame(stateRef.current);
       syncSnapshot();
@@ -1664,22 +1663,17 @@ export default function App() {
     syncSnapshot();
   };
 
+  const handlePointerAim = (cursor: Vec, viewport: { width: number; height: number }) => {
+    aimPlayerAtCursor(stateRef.current, cursor, viewport);
+  };
+
   const latestNotice = snapshot.notices[0];
 
   return (
     <main className="shell">
       <div className="gameWrap">
-        <canvas
-          ref={canvasRef}
-          width={CANVAS.width}
-          height={CANVAS.height}
-          aria-label="LoopForge playable arena map"
-          tabIndex={0}
-          data-player-heading={snapshot.player.heading.toFixed(3)}
-          data-player-x={snapshot.player.x.toFixed(1)}
-          data-player-y={snapshot.player.y.toFixed(1)}
-          onPointerDown={handlePointerDown}
-        />
+        <ThreeCanvas state={snapshot} onPointerDown={handlePointerDown} onPointerAim={handlePointerAim} />
+        {snapshot.status === 'playing' && <GameHud state={snapshot} />}
         {latestNotice && <div className="srOnly" aria-live="polite">{latestNotice.title}. {latestNotice.detail}</div>}
         {snapshot.status !== 'playing' && (
           <div className={`overlay overlay-${snapshot.status}`}>

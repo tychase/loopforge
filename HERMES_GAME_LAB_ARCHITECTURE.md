@@ -26,7 +26,7 @@ Generated Game Variant JSON
 
 The frontend should include:
 
-- lightweight canvas game view, currently pseudo-FPV and later sprite billboard capable
+- lightweight ThreeJS arena renderer with React UI overlays and sprite billboard support
 - score display
 - timer
 - upgrade selection

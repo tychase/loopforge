@@ -10,19 +10,18 @@ The game should win attention visually first, then keep attention through a clea
 
 ## Current Visual Baseline
 
-The renderer is now a lightweight 2.5D canvas arena:
+The renderer is now a staged ThreeJS arena layered under React UI:
 
-- camera-follow world view
-- angled projection floor grid
-- projected arena boundaries
-- screen-Y depth sorting
-- scale-by-Y entities
-- billboard player and judge characters
-- elliptical shadows
+- angled third-person/top-down camera follow
+- 3D floor plane and neon grid
+- glowing arena boundaries and corner pylons
+- simple 3D player, shard, blast, and portal objects
+- judge boss billboards with simple 3D bases
+- fake ground shadows
 - shard/blast VFX sheet support
-- threat rings, lunge aura, edge arrows, and danger vignette
+- threat, health, minimap, and notice feedback in React overlays
 
-Keep this path for the jam build. Do not switch to Three.js unless canvas polish becomes the blocker.
+Keep this path for the jam build. Do not rewrite the simulation or add large asset dependencies; ThreeJS should remain a fast renderer layer over the existing game state.
 
 ## Desired Look
 
@@ -108,7 +107,7 @@ Use handles and boss titles in UI. Make visuals archetypal and readable rather t
 
 ## Arena Direction
 
-Next arena visual additions should be lightweight canvas elements:
+Next arena visual additions should be lightweight ThreeJS or React-overlay elements:
 
 - judge spawn portals
 - animated boundary lights
@@ -119,7 +118,7 @@ Next arena visual additions should be lightweight canvas elements:
 - score popups
 - brief impact flashes
 
-These should reinforce the 2.5D illusion without changing collision or movement logic.
+These should reinforce the 3D arena illusion without changing collision or movement logic.
 
 ## VFX Direction
 

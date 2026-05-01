@@ -109,6 +109,25 @@ export type GamePortal = Vec & {
   color: string;
   secondaryColor: string;
 };
+export type PortalSafetyZone = {
+  id: 'entry-corridor';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  door: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  egress: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+};
 export type Upgrade = {
   id: string;
   title: string;
@@ -152,6 +171,7 @@ export type GameState = {
   pickupCombo: PickupCombo;
   portals: GamePortal[];
   portalCooldown: number;
+  portalSafetyActive: boolean;
   pendingPortal?: GamePortalKind;
   screenShake: number;
   hitFlash: number;
@@ -162,11 +182,11 @@ export const DEFAULT_VARIANT: GameVariant = {
   id: 'judge-rush-arena',
   name: 'Judge Rush Arena',
   hypothesis: 'A readable camera-follow arena where Vibe Jam judge monsters chase, learn, and respawn is stronger than a fixed-position survival shooter.',
-  arena: { width: 1280, height: 1280 },
-  waveSeconds: 28,
-  shardsPerWave: 10,
-  baseEnemySpeed: 70,
-  enemySpeedPerWave: 11,
+  arena: { width: 2200, height: 1800 },
+  waveSeconds: 34,
+  shardsPerWave: 14,
+  baseEnemySpeed: 82,
+  enemySpeedPerWave: 12,
   seed: 1337,
 };
 
@@ -188,6 +208,13 @@ const PICKUP_TRAIL_SECONDS = 0.46;
 const PICKUP_PARTICLE_SECONDS = 0.62;
 const SCORE_POPUP_SECONDS = 0.9;
 const PORTAL_COOLDOWN_SECONDS = 1.1;
+const ENTRY_CORRIDOR_MARGIN = 84;
+const ENTRY_CORRIDOR_WIDTH = 380;
+const ENTRY_CORRIDOR_HEIGHT = 430;
+const FORCE_FIELD_WIDTH = 34;
+const FORCE_FIELD_HEIGHT = 190;
+const FORCE_FIELD_EGRESS_WIDTH = 320;
+const FORCE_FIELD_EGRESS_PADDING = 128;
 
 const UPGRADES: Upgrade[] = [
   { id: 'swift-boots', title: 'Vibe Sneakers', description: '+12% sprint speed', icon: 'SPD', tag: 'movement', nextWave: 'Kite judges harder', color: '#7df9ff', apply: (state) => { state.player.speed *= 1.12; } },
@@ -212,6 +239,117 @@ function seededPoint(variant: GameVariant, index: number, margin = 80): Vec {
   return { x, y };
 }
 
+export function getPortalSafetyZone(variant: GameVariant): PortalSafetyZone {
+  const width = Math.min(ENTRY_CORRIDOR_WIDTH, variant.arena.width * 0.24);
+  const height = Math.min(ENTRY_CORRIDOR_HEIGHT, variant.arena.height * 0.34);
+  const x = ENTRY_CORRIDOR_MARGIN;
+  const y = variant.arena.height / 2 - height / 2;
+  const doorX = x + width;
+  const doorY = variant.arena.height / 2 - FORCE_FIELD_HEIGHT / 2;
+  return {
+    id: 'entry-corridor',
+    x,
+    y,
+    width,
+    height,
+    door: {
+      x: doorX,
+      y: doorY,
+      width: FORCE_FIELD_WIDTH,
+      height: FORCE_FIELD_HEIGHT,
+    },
+    egress: {
+      x: doorX,
+      y: doorY - FORCE_FIELD_EGRESS_PADDING,
+      width: FORCE_FIELD_EGRESS_WIDTH,
+      height: FORCE_FIELD_HEIGHT + FORCE_FIELD_EGRESS_PADDING * 2,
+    },
+  };
+}
+
+export function isInsidePortalSafetyZone(variant: GameVariant, point: Vec, padding = 0): boolean {
+  const zone = getPortalSafetyZone(variant);
+  return isInsideRect(zone, point, padding);
+}
+
+export function isInsidePortalEnemyExclusionZone(variant: GameVariant, point: Vec, padding = 0): boolean {
+  const zone = getPortalSafetyZone(variant);
+  return isInsideRect(zone, point, padding) || isInsideRect(zone.egress, point, padding);
+}
+
+function isInsideRect(rect: { x: number; y: number; width: number; height: number }, point: Vec, padding = 0): boolean {
+  return point.x >= rect.x - padding
+    && point.x <= rect.x + rect.width + padding
+    && point.y >= rect.y - padding
+    && point.y <= rect.y + rect.height + padding;
+}
+
+function pushPointOutsideRect(rect: { x: number; y: number; width: number; height: number }, point: Vec, radius: number): void {
+  const clearance = radius + 8;
+  const candidates = [
+    { distance: Math.abs(point.x - rect.x), apply: () => { point.x = rect.x - clearance; } },
+    { distance: Math.abs(point.x - (rect.x + rect.width)), apply: () => { point.x = rect.x + rect.width + clearance; } },
+    { distance: Math.abs(point.y - rect.y), apply: () => { point.y = rect.y - clearance; } },
+    { distance: Math.abs(point.y - (rect.y + rect.height)), apply: () => { point.y = rect.y + rect.height + clearance; } },
+  ];
+  candidates.sort((a, b) => a.distance - b.distance)[0].apply();
+}
+
+function pushPointOutsidePortalSafetyZone(variant: GameVariant, point: Vec, radius: number): void {
+  const zone = getPortalSafetyZone(variant);
+  if (!isInsidePortalSafetyZone(variant, point, radius)) return;
+  pushPointOutsideRect(zone, point, radius);
+}
+
+function pushPointOutsidePortalEnemyExclusionZone(variant: GameVariant, point: Vec, radius: number): void {
+  const zone = getPortalSafetyZone(variant);
+  if (isInsideRect(zone.egress, point, radius)) {
+    pushPointOutsideRect(zone.egress, point, radius);
+  }
+  if (isInsideRect(zone, point, radius)) {
+    pushPointOutsideRect(zone, point, radius);
+  }
+}
+
+function keepEnemyOutOfPortalSafetyZone(variant: GameVariant, enemy: Enemy): void {
+  const zone = getPortalSafetyZone(variant);
+  if (isInsidePortalEnemyExclusionZone(variant, enemy, enemy.radius)) {
+    enemy.x = zone.egress.x + zone.egress.width + enemy.radius + 8;
+  }
+  enemy.x = Math.max(enemy.radius, Math.min(variant.arena.width - enemy.radius, enemy.x));
+  enemy.y = Math.max(enemy.radius, Math.min(variant.arena.height - enemy.radius, enemy.y));
+}
+
+function constrainPlayerAroundPortalSafetyZone(state: GameState, previous: Vec): void {
+  const zone = getPortalSafetyZone(state.variant);
+  const player = state.player;
+  const radius = player.radius;
+  const wasInside = isInsidePortalSafetyZone(state.variant, previous, 0);
+  const isInside = isInsidePortalSafetyZone(state.variant, player, 0);
+  const isInProtectedSpace = isInsidePortalEnemyExclusionZone(state.variant, player, 0);
+
+  if (!state.portalSafetyActive) {
+    if (isInProtectedSpace) {
+      pushPointOutsidePortalEnemyExclusionZone(state.variant, player, radius);
+    }
+    return;
+  }
+
+  if (wasInside && player.x <= zone.door.x + radius) {
+    player.x = Math.max(zone.x + radius, Math.min(zone.door.x + radius, player.x));
+    player.y = Math.max(zone.y + radius, Math.min(zone.y + zone.height - radius, player.y));
+    return;
+  }
+
+  if (!wasInside && isInside) {
+    pushPointOutsidePortalSafetyZone(state.variant, player, radius);
+  }
+
+  if (!isInsidePortalEnemyExclusionZone(state.variant, player, 0)) {
+    state.portalSafetyActive = false;
+  }
+}
+
 function createExperience(): JudgeExperience {
   return {
     level: 1,
@@ -222,14 +360,15 @@ function createExperience(): JudgeExperience {
 }
 
 function createPortals(variant: GameVariant, includeReturnPortal: boolean): GamePortal[] {
+  const safeZone = getPortalSafetyZone(variant);
   const portals: GamePortal[] = [
     {
       id: 'vibe-jam-exit',
       kind: 'exit',
       label: 'Vibe Jam Portal',
-      x: variant.arena.width - 190,
-      y: variant.arena.height - 190,
-      radius: 42,
+      x: variant.arena.width - 230,
+      y: variant.arena.height - 230,
+      radius: 48,
       color: '#ff4dca',
       secondaryColor: '#7df9ff',
     },
@@ -239,9 +378,9 @@ function createPortals(variant: GameVariant, includeReturnPortal: boolean): Game
       id: 'vibe-jam-return',
       kind: 'return',
       label: 'Return Portal',
-      x: variant.arena.width / 2 - 96,
-      y: variant.arena.height / 2,
-      radius: 42,
+      x: safeZone.x + 118,
+      y: safeZone.y + safeZone.height / 2,
+      radius: 46,
       color: '#ffcf5c',
       secondaryColor: '#9cff8f',
     });
@@ -348,7 +487,7 @@ export function createInitialState(variant: GameVariant = DEFAULT_VARIANT, optio
   const state: GameState = {
     variant,
     player: {
-      x: returnPortal ? returnPortal.x + 92 : variant.arena.width / 2,
+      x: returnPortal ? returnPortal.x + 104 : variant.arena.width / 2,
       y: returnPortal ? returnPortal.y : variant.arena.height / 2,
       radius: 18,
       speed: 255,
@@ -369,7 +508,7 @@ export function createInitialState(variant: GameVariant = DEFAULT_VARIANT, optio
     status: options.portalArrival ? 'playing' : 'ready',
     message: options.portalArrival
       ? 'Portal handoff received. The arena is live and the return portal is behind you.'
-      : 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and blast the nearest active boss.',
+      : 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and aim shard blasts with the cursor.',
     notices: [],
     pickupTrails: [],
     pickupParticles: [],
@@ -377,16 +516,13 @@ export function createInitialState(variant: GameVariant = DEFAULT_VARIANT, optio
     pickupCombo: { count: 0, best: 0, timer: 0, pulse: 0 },
     portals,
     portalCooldown: options.portalArrival ? PORTAL_COOLDOWN_SECONDS : 0,
+    portalSafetyActive: options.portalArrival === true,
     screenShake: 0,
     hitFlash: 0,
     nextId: 1,
   };
   refillWave(state);
   if (options.portalArrival) {
-    const openingTarget = nearestChasingEnemy(state);
-    if (openingTarget) {
-      state.player.heading = Math.atan2(openingTarget.y - state.player.y, openingTarget.x - state.player.x);
-    }
     pushCombatNotice(state, {
       kind: 'wave',
       title: 'Portal arrival',
@@ -410,6 +546,7 @@ export function refillWave(state: GameState): void {
     const enemy = spawnEnemyForWave(state.variant, state.wave, i);
     const saved = previous.get(enemy.judge.handle);
     if (saved) enemy.experience = saved;
+    keepEnemyOutOfPortalSafetyZone(state.variant, enemy);
     return enemy;
   });
   state.blasts = [];
@@ -424,10 +561,6 @@ export function startGame(state: GameState): boolean {
   if (state.status !== 'ready') return false;
   state.status = 'playing';
   state.graceRemaining = START_GRACE_SECONDS;
-  const openingTarget = nearestChasingEnemy(state);
-  if (openingTarget) {
-    state.player.heading = Math.atan2(openingTarget.y - state.player.y, openingTarget.x - state.player.x);
-  }
   state.message = 'Safe window live. The judges unlock when the grace ring expires.';
   pushCombatNotice(state, {
     kind: 'wave',
@@ -482,7 +615,7 @@ export function spawnEnemyForWave(variant: GameVariant, wave: number, index: num
   const x = edge === 0 ? 32 : edge === 1 ? variant.arena.width - 32 : t * variant.arena.width;
   const y = edge === 2 ? 32 : edge === 3 ? variant.arena.height - 32 : t * variant.arena.height;
   const maxHealth = 82 + wave * 12 + index * 5;
-  return {
+  const enemy: Enemy = {
     id: wave * 1000 + index,
     x,
     y,
@@ -498,12 +631,21 @@ export function spawnEnemyForWave(variant: GameVariant, wave: number, index: num
     lastDamageDistance: 0,
     experience: createExperience(),
   };
+  keepEnemyOutOfPortalSafetyZone(variant, enemy);
+  return enemy;
 }
 
 const MOUSE_LOOK_SENSITIVITY = 0.00135;
 
 export function turnPlayerView(state: GameState, movementX: number): void {
   state.player.heading = normalizeAngle(state.player.heading + movementX * MOUSE_LOOK_SENSITIVITY * state.player.turnSpeed);
+}
+
+export function aimPlayerAtCursor(state: GameState, cursor: Vec, viewport: { width: number; height: number }): void {
+  const dx = cursor.x - viewport.width / 2;
+  const dy = cursor.y - viewport.height / 2;
+  if (Math.hypot(dx, dy) < 8) return;
+  state.player.heading = normalizeAngle(Math.atan2(dy, dx));
 }
 
 export function nearestChasingEnemy(state: GameState): Enemy | undefined {
@@ -516,10 +658,6 @@ export function nearestChasingEnemy(state: GameState): Enemy | undefined {
 
 export function fireShardBlast(state: GameState): boolean {
   if (state.status !== 'playing' || state.player.blastCooldown > 0) return false;
-  const target = nearestChasingEnemy(state);
-  if (target) {
-    state.player.heading = Math.atan2(target.y - state.player.y, target.x - state.player.x);
-  }
   const vx = Math.cos(state.player.heading) * BLAST_SPEED;
   const vy = Math.sin(state.player.heading) * BLAST_SPEED;
   state.blasts.push({
@@ -534,7 +672,7 @@ export function fireShardBlast(state: GameState): boolean {
     maxAge: BLAST_MAX_AGE,
   });
   state.player.blastCooldown = BLAST_COOLDOWN;
-  state.message = target ? `Shard blast auto-locked on ${target.judge.handle}.` : 'Shard blast fired.';
+  state.message = 'Shard blast fired toward cursor.';
   state.screenShake = Math.max(state.screenShake, 1.8);
   return true;
 }
@@ -552,6 +690,7 @@ export function moveEnemiesTowardPlayer(state: GameState, dt: number): void {
     const ny = dy / len;
     enemy.x += (nx + -ny * zig * 0.35) * enemy.speed * aggression * dt;
     enemy.y += (ny + nx * zig * 0.35) * enemy.speed * aggression * dt;
+    keepEnemyOutOfPortalSafetyZone(state.variant, enemy);
   }
 }
 
@@ -655,6 +794,7 @@ export function respawnDefeatedJudges(state: GameState, dt: number): void {
       const point = seededPoint(state.variant, enemy.id + enemy.experience.defeats * 97, 48);
       enemy.x = point.x;
       enemy.y = point.y;
+      keepEnemyOutOfPortalSafetyZone(state.variant, enemy);
       enemy.maxHealth = Math.round(enemy.maxHealth + 8 + enemy.experience.level * 2);
       enemy.health = enemy.maxHealth;
       enemy.status = 'chasing';
@@ -677,6 +817,7 @@ export function respawnDefeatedJudges(state: GameState, dt: number): void {
 }
 
 export function checkCollisions(state: GameState): void {
+  if (state.portalSafetyActive && isInsidePortalEnemyExclusionZone(state.variant, state.player, 0)) return;
   for (const enemy of state.enemies) {
     if (enemy.status !== 'chasing') continue;
     if (distance(state.player, enemy) <= state.player.radius + enemy.radius) {
@@ -750,11 +891,12 @@ export function tickGame(state: GameState, input: Vec, dt: number): void {
 
   const moveLength = Math.hypot(input.x, input.y);
   if (moveLength > 0) {
+    const previous = { x: state.player.x, y: state.player.y };
     state.player.x += (input.x / moveLength) * state.player.speed * dt;
     state.player.y += (input.y / moveLength) * state.player.speed * dt;
-    state.player.heading = Math.atan2(input.y, input.x);
+    clampPlayerToArena(state);
+    constrainPlayerAroundPortalSafetyZone(state, previous);
   }
-
   clampPlayerToArena(state);
   collectShard(state);
   updateShardBlasts(state, dt);

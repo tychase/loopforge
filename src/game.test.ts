@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { JUDGE_CHASERS, selectJudgeSprite, type CharacterAnimation } from './characters';
 import {
   DEFAULT_VARIANT,
+  aimPlayerAtCursor,
   applyUpgradeAndStartNextWave,
+  checkCollisions,
   checkPortalCollisions,
   clampPlayerToArena,
   collectShard,
@@ -11,7 +13,10 @@ import {
   chooseUpgradeOptions,
   distance,
   fireShardBlast,
+  getPortalSafetyZone,
   isNavigationKey,
+  isInsidePortalEnemyExclusionZone,
+  isInsidePortalSafetyZone,
   nearestChasingEnemy,
   respawnDefeatedJudges,
   spawnEnemyForWave,
@@ -151,9 +156,13 @@ describe('LoopForge game logic', () => {
   it('starts portal arrivals in play with a nearby return portal', () => {
     const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
     const portal = state.portals.find((candidate) => candidate.kind === 'return');
+    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
 
     expect(state.status).toBe('playing');
     expect(portal).toBeDefined();
+    expect(isInsidePortalSafetyZone(DEFAULT_VARIANT, portal!)).toBe(true);
+    expect(state.player.x).toBeGreaterThan(safeZone.x);
+    expect(state.player.x).toBeLessThan(safeZone.door.x);
     expect(distance(state.player, portal!)).toBeGreaterThan(state.player.radius + portal!.radius);
 
     state.portalCooldown = 0;
@@ -162,6 +171,95 @@ describe('LoopForge game logic', () => {
     checkPortalCollisions(state);
 
     expect(consumePortalTrigger(state)).toBe('return');
+  });
+
+  it('protects portal arrivals from judge collisions inside the entry corridor', () => {
+    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
+    const judge = state.enemies[0];
+    state.graceRemaining = 0;
+    judge.x = state.player.x;
+    judge.y = state.player.y;
+
+    tickGame(state, { x: 0, y: 0 }, 0.1);
+
+    expect(state.status).toBe('playing');
+    expect(isInsidePortalSafetyZone(DEFAULT_VARIANT, state.player)).toBe(true);
+  });
+
+  it('keeps judges out of the protected portal corridor', () => {
+    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
+    const judge = state.enemies[0];
+    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
+    state.graceRemaining = 0;
+    judge.x = safeZone.door.x + 12;
+    judge.y = state.player.y;
+
+    tickGame(state, { x: 0, y: 0 }, 0.25);
+
+    expect(isInsidePortalSafetyZone(DEFAULT_VARIANT, judge, judge.radius)).toBe(false);
+    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, judge, judge.radius)).toBe(false);
+    expect(judge.x).toBeGreaterThan(safeZone.egress.x + safeZone.egress.width);
+  });
+
+  it('keeps the portal launch lane protected after the one-way door', () => {
+    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
+    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
+    const judge = state.enemies[0];
+    state.graceRemaining = 0;
+    state.player.x = safeZone.egress.x + safeZone.egress.width / 2;
+    state.player.y = safeZone.egress.y + safeZone.egress.height / 2;
+    judge.x = state.player.x;
+    judge.y = state.player.y;
+
+    tickGame(state, { x: 0, y: 0 }, 0.1);
+
+    expect(state.status).toBe('playing');
+    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, state.player)).toBe(true);
+    expect(state.portalSafetyActive).toBe(true);
+  });
+
+  it('turns off portal safety after the player exits the launch lane', () => {
+    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
+    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
+    state.enemies = [];
+    state.player.x = safeZone.egress.x + safeZone.egress.width - 8;
+    state.player.y = safeZone.egress.y + safeZone.egress.height / 2;
+
+    tickGame(state, { x: 1, y: 0 }, 0.2);
+
+    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, state.player)).toBe(false);
+    expect(state.portalSafetyActive).toBe(false);
+  });
+
+  it('blocks arena players from entering the protected portal corridor', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
+    startGame(state);
+    state.enemies = [];
+    state.player.x = safeZone.egress.x + safeZone.egress.width + state.player.radius + 4;
+    state.player.y = safeZone.egress.y + safeZone.egress.height / 2;
+
+    tickGame(state, { x: -1, y: 0 }, 0.2);
+
+    expect(state.portalSafetyActive).toBe(false);
+    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, state.player)).toBe(false);
+    expect(state.player.x).toBeGreaterThan(safeZone.egress.x + safeZone.egress.width);
+  });
+
+  it('does not give camping protection to players who are not portal arrivals', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
+    const judge = state.enemies[0];
+    startGame(state);
+    state.graceRemaining = 0;
+    state.player.x = safeZone.egress.x + safeZone.egress.width / 2;
+    state.player.y = safeZone.egress.y + safeZone.egress.height / 2;
+    judge.x = state.player.x;
+    judge.y = state.player.y;
+
+    checkCollisions(state);
+
+    expect(state.status).toBe('gameover');
   });
 
   it('uses the real Vibe Jam jury as named judge chasers', () => {
@@ -194,18 +292,19 @@ describe('LoopForge game logic', () => {
     expect(selectJudgeSprite(JUDGE_CHASERS[1], 'chase')).toBeUndefined();
   });
 
-  it('moves with cursor keys across arena map space', () => {
+  it('moves with cursor keys across arena space without stealing mouse aim', () => {
     const state = createInitialState(DEFAULT_VARIANT);
     startGame(state);
     state.graceRemaining = 0;
     const startX = state.player.x;
     const startY = state.player.y;
+    const heading = state.player.heading;
 
     tickGame(state, { x: 1, y: -1 }, 0.25);
 
     expect(state.player.x).toBeGreaterThan(startX);
     expect(state.player.y).toBeLessThan(startY);
-    expect(state.player.heading).toBeCloseTo(-Math.PI / 4, 5);
+    expect(state.player.heading).toBe(heading);
   });
 
   it('waits in the ready state until the player starts the run', () => {
@@ -220,7 +319,7 @@ describe('LoopForge game logic', () => {
     expect(state.enemies[0].x).toBe(enemyX);
   });
 
-  it('finds the nearest active judge for arena auto-targeting', () => {
+  it('finds the nearest active judge for threat tracking', () => {
     const state = createInitialState(DEFAULT_VARIANT);
     state.enemies[0].x = state.player.x + 400;
     state.enemies[0].y = state.player.y;
@@ -283,6 +382,18 @@ describe('LoopForge game logic', () => {
     expect(state.player.heading).toBeGreaterThan(startHeading);
   });
 
+  it('aims the player toward the cursor around the followed camera center', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+
+    aimPlayerAtCursor(state, { x: 800, y: 300 }, { width: 1000, height: 600 });
+
+    expect(state.player.heading).toBeCloseTo(0, 5);
+
+    aimPlayerAtCursor(state, { x: 500, y: 100 }, { width: 1000, height: 600 });
+
+    expect(state.player.heading).toBeCloseTo(-Math.PI / 2, 5);
+  });
+
   it('scales mouse-look sensitivity from the player turn speed', () => {
     const slow = createInitialState(DEFAULT_VARIANT);
     const fast = createInitialState(DEFAULT_VARIANT);
@@ -335,11 +446,12 @@ describe('LoopForge game logic', () => {
     expect(state.player.blastCooldown).toBeGreaterThan(0);
   });
 
-  it('auto-locks shard blasts onto the nearest active judge', () => {
+  it('does not auto-lock shard blasts onto nearby judges', () => {
     const state = createInitialState(DEFAULT_VARIANT);
     startGame(state);
     state.player.x = 200;
     state.player.y = 200;
+    state.player.heading = 0;
     state.enemies[0].x = 200;
     state.enemies[0].y = 60;
     state.enemies[1].x = 600;
@@ -347,9 +459,10 @@ describe('LoopForge game logic', () => {
 
     expect(fireShardBlast(state)).toBe(true);
 
-    expect(state.blasts[0].vy).toBeLessThan(0);
-    expect(Math.abs(state.blasts[0].vx)).toBeLessThan(1);
-    expect(state.message).toContain(state.enemies[0].judge.handle);
+    expect(state.player.heading).toBe(0);
+    expect(state.blasts[0].vx).toBeGreaterThan(0);
+    expect(Math.abs(state.blasts[0].vy)).toBeLessThan(1);
+    expect(state.message).not.toContain(state.enemies[0].judge.handle);
   });
 
   it('damages and defeats judges with shard blasts for score', () => {

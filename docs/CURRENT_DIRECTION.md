@@ -23,10 +23,9 @@ LoopForge has crossed from rough prototype into a playable vertical slice founda
 
 Already in place:
 
-- 2.5D camera-follow arena
-- angled projection grid
-- screen-Y depth sorting
-- billboard player/judges
+- staged ThreeJS camera-follow arena renderer
+- 3D neon floor plane/grid with angled third-person camera follow
+- simple 3D/billboard player, shards, portals, blasts, and judge bosses
 - shard collection
 - shard collection trails, score popups, burst particles, magnet preview tethers, and combo/streak feedback
 - shard blast combat
@@ -36,7 +35,7 @@ Already in place:
 - upgrade choice
 - polished upgrade mutation overlay with tags, sigils, and next-wave language
 - Vibe Jam exit portal and portal-arrival return portal support
-- arena-first layout with essential HUD inside the canvas
+- arena-first layout with React HUD overlays above the ThreeJS scene
 - threat warning rings, lunge aura, edge arrows, and danger pulse
 - tests/build passing
 
@@ -80,18 +79,20 @@ In the first 60 seconds:
 
 ## Visual Direction
 
-Keep the current lightweight 2.5D canvas path for the jam build.
+Engine classification: ThreeJS.
+
+Keep this as a staged migration, not a full game rewrite. React remains the app/UI layer, `src/game.ts` remains the local simulation source of truth, and ThreeJS is responsible for rendering the arena and world entities.
 
 The game should feel like:
 
 - neon AI lab arena
 - arcade boss rush
-- readable mascot billboards
+- readable mascot billboards and simple 3D silhouettes
 - energetic particle feedback
 - playful contest parody
 - professional web game polish
 
-Do not move to Three.js unless the 2.5D canvas ceiling becomes the real blocker. Right now, polish per hour is much higher in canvas.
+Do not add a second simulation, multiplayer, accounts, inventory, or large assets during this migration. The ThreeJS work should improve presentation while preserving the current playable core.
 
 ## Judge Reference Direction
 
@@ -170,7 +171,7 @@ Add one simple behavior per judge, with visible telegraphs.
 
 ### Patch 4: Arena Visual Pass
 
-Purpose: make the game look more professional without a full engine rewrite.
+Purpose: make the game look more professional through the staged ThreeJS renderer without a full gameplay rewrite.
 
 Add:
 

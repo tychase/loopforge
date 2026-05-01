@@ -6,5 +6,6 @@ dist/
 npm-debug.log*
 .vite/
 .codex-vite*.log
+.codex-*-vite*.log
 output/
 .playwright-cli/
