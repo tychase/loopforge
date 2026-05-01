@@ -3,8 +3,10 @@ import { JUDGE_CHASERS, selectJudgeSprite, type CharacterAnimation } from './cha
 import {
   DEFAULT_VARIANT,
   applyUpgradeAndStartNextWave,
+  checkPortalCollisions,
   clampPlayerToArena,
   collectShard,
+  consumePortalTrigger,
   createInitialState,
   chooseUpgradeOptions,
   distance,
@@ -57,6 +59,38 @@ describe('LoopForge game logic', () => {
     expect(state.shards).toHaveLength(0);
   });
 
+  it('creates pickup feedback and chains fast shard combos', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    state.player.x = 100;
+    state.player.y = 100;
+    state.shards = [{ id: 10, x: 104, y: 102, radius: 8, value: 2 }];
+
+    expect(collectShard(state)).toBe(true);
+
+    expect(state.score).toBe(2);
+    expect(state.pickupCombo.count).toBe(1);
+    expect(state.pickupCombo.best).toBe(1);
+    expect(state.pickupTrails).toHaveLength(1);
+    expect(state.scorePopups).toHaveLength(1);
+    expect(state.pickupParticles.length).toBeGreaterThan(0);
+
+    state.shards = [{ id: 11, x: 106, y: 100, radius: 8, value: 2 }];
+
+    expect(collectShard(state)).toBe(true);
+
+    expect(state.score).toBe(4);
+    expect(state.pickupCombo.count).toBe(2);
+    expect(state.pickupCombo.best).toBe(2);
+    expect(state.scorePopups.at(-1)?.combo).toBe(2);
+
+    tickGame(state, { x: 0, y: 0 }, 1.2);
+
+    expect(state.pickupCombo.count).toBe(0);
+    expect(state.pickupCombo.timer).toBe(0);
+    expect(state.pickupTrails).toHaveLength(0);
+    expect(state.scorePopups).toHaveLength(0);
+  });
+
   it('scales enemy speed with wave while staying deterministic from the variant', () => {
     const waveOne = spawnEnemyForWave(DEFAULT_VARIANT, 1, 0);
     const waveFour = spawnEnemyForWave(DEFAULT_VARIANT, 4, 0);
@@ -73,6 +107,7 @@ describe('LoopForge game logic', () => {
 
     expect(options).toHaveLength(3);
     expect(new Set(options.map((option) => option.id)).size).toBe(3);
+    expect(options.every((option) => option.icon && option.tag && option.nextWave && option.color)).toBe(true);
   });
 
   it('applies upgrades after the next wave refills', () => {
@@ -96,6 +131,37 @@ describe('LoopForge game logic', () => {
     expect(state.graceRemaining).toBeGreaterThan(0);
     expect(state.waveTimeRemaining).toBe(DEFAULT_VARIANT.waveSeconds + 4);
     expect(state.shards.every((shard) => shard.value === 5)).toBe(true);
+  });
+
+  it('triggers the Vibe Jam exit portal when the player enters it', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    startGame(state);
+    const portal = state.portals.find((candidate) => candidate.kind === 'exit');
+    expect(portal).toBeDefined();
+    state.player.x = portal!.x;
+    state.player.y = portal!.y;
+
+    checkPortalCollisions(state);
+
+    expect(consumePortalTrigger(state)).toBe('exit');
+    expect(consumePortalTrigger(state)).toBeUndefined();
+    expect(state.message).toContain('Vibe Jam Portal');
+  });
+
+  it('starts portal arrivals in play with a nearby return portal', () => {
+    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
+    const portal = state.portals.find((candidate) => candidate.kind === 'return');
+
+    expect(state.status).toBe('playing');
+    expect(portal).toBeDefined();
+    expect(distance(state.player, portal!)).toBeGreaterThan(state.player.radius + portal!.radius);
+
+    state.portalCooldown = 0;
+    state.player.x = portal!.x;
+    state.player.y = portal!.y;
+    checkPortalCollisions(state);
+
+    expect(consumePortalTrigger(state)).toBe('return');
   });
 
   it('uses the real Vibe Jam jury as named judge chasers', () => {

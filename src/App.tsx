@@ -6,6 +6,7 @@ import {
   applyUpgradeAndStartNextWave,
   chooseUpgradeOptions,
   createInitialState,
+  consumePortalTrigger,
   distance,
   fireShardBlast,
   isNavigationKey,
@@ -14,10 +15,13 @@ import {
   tickGame,
   type CombatNotice,
   type Enemy,
+  type GamePortal,
+  type GamePortalKind,
   type GameState,
   type JudgeExperience,
   type Shard,
   type ShardBlast,
+  type Upgrade,
   type Vec,
 } from './game';
 import { createWorldView, type WorldView } from './game/render/camera';
@@ -63,11 +67,69 @@ type JudgeVars = CSSProperties & {
   '--judge-alt': string;
 };
 
+type UpgradeVars = CSSProperties & {
+  '--upgrade-color': string;
+};
+
+type PortalQueryContext = {
+  isPortalArrival: boolean;
+  returnRef?: string;
+  params: URLSearchParams;
+};
+
 function inputVector(): Vec {
   return {
     x: (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0),
     y: (keys.has('arrowdown') || keys.has('s') ? 1 : 0) - (keys.has('arrowup') || keys.has('w') ? 1 : 0),
   };
+}
+
+function readPortalQueryContext(): PortalQueryContext {
+  if (typeof window === 'undefined') {
+    return { isPortalArrival: false, params: new URLSearchParams() };
+  }
+  const params = new URLSearchParams(window.location.search);
+  return {
+    isPortalArrival: params.get('portal') === 'true',
+    returnRef: params.get('ref') ?? undefined,
+    params,
+  };
+}
+
+function currentGameRef(): string {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+function normalizePortalTarget(target: string): string {
+  if (/^https?:\/\//i.test(target)) return target;
+  return `https://${target}`;
+}
+
+function appendPortalParams(base: string, params: URLSearchParams): string {
+  const url = new URL(normalizePortalTarget(base), typeof window !== 'undefined' ? window.location.href : undefined);
+  params.forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
+function buildPortalParams(context: PortalQueryContext, state: GameState, includePortalFlag: boolean): URLSearchParams {
+  const params = new URLSearchParams(context.params);
+  params.delete('portal');
+  if (!params.has('username')) params.set('username', 'LoopForger');
+  if (!params.has('color')) params.set('color', 'cyan');
+  params.set('speed', Math.max(1, state.player.speed / 50).toFixed(1));
+  params.set('ref', currentGameRef());
+  if (includePortalFlag) params.set('portal', 'true');
+  return params;
+}
+
+function buildPortalRedirect(kind: GamePortalKind, context: PortalQueryContext, state: GameState): string {
+  if (kind === 'return' && context.returnRef) {
+    return appendPortalParams(context.returnRef, buildPortalParams(context, state, true));
+  }
+  return appendPortalParams('https://vibej.am/portal/2026', buildPortalParams(context, state, false));
 }
 
 function cloneExperience(experience: JudgeExperience): JudgeExperience {
@@ -86,6 +148,11 @@ function snapshotState(state: GameState): GameState {
     enemies: state.enemies.map((enemy) => ({ ...enemy, experience: cloneExperience(enemy.experience) })),
     blasts: state.blasts.map((blast) => ({ ...blast })),
     notices: state.notices.map((notice) => ({ ...notice })),
+    pickupTrails: state.pickupTrails.map((trail) => ({ ...trail, from: { ...trail.from }, to: { ...trail.to } })),
+    pickupParticles: state.pickupParticles.map((particle) => ({ ...particle })),
+    scorePopups: state.scorePopups.map((popup) => ({ ...popup })),
+    pickupCombo: { ...state.pickupCombo },
+    portals: state.portals.map((portal) => ({ ...portal })),
   };
 }
 
@@ -111,10 +178,9 @@ function learnedLabel(enemy: Enemy): string {
   return 'taking notes';
 }
 
-function judgeStyle(enemy: Enemy): JudgeVars {
+function upgradeStyle(upgrade: Upgrade): UpgradeVars {
   return {
-    '--judge-color': enemy.judge.color,
-    '--judge-alt': enemy.judge.secondaryColor,
+    '--upgrade-color': upgrade.color ?? '#7df9ff',
   };
 }
 
@@ -585,13 +651,86 @@ function drawMapTargeting(ctx: CanvasRenderingContext2D, state: GameState, view:
   ctx.restore();
 }
 
+function drawMapPortal(ctx: CanvasRenderingContext2D, portal: GamePortal, state: GameState, view: WorldView): void {
+  const point = worldToScreen(view, portal);
+  const pulse = 0.5 + Math.sin(state.elapsed * 4.8 + (portal.kind === 'return' ? 1.5 : 0)) * 0.5;
+  const radius = portal.radius * view.scale * point.scale;
+  const inner = radius * (0.58 + pulse * 0.08);
+  const outer = radius * (1.18 + pulse * 0.18);
+  ctx.save();
+  drawGroundShadow(ctx, point, portal.radius * 0.95, portal.radius * 0.18, 0.34);
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = `rgba(247, 242, 220, ${0.3 + pulse * 0.22})`;
+  ctx.fillStyle = portal.kind === 'return' ? 'rgba(255, 207, 92, 0.1)' : 'rgba(255, 77, 202, 0.1)';
+  ctx.shadowColor = portal.color;
+  ctx.shadowBlur = 24 + pulse * 18;
+  ctx.lineWidth = Math.max(2, 4 * point.scale);
+  ctx.beginPath();
+  ctx.ellipse(point.x, point.y, outer, outer * 0.46, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = portal.secondaryColor;
+  ctx.lineWidth = Math.max(2, 3 * point.scale);
+  ctx.beginPath();
+  ctx.ellipse(point.x, point.y - 6 * point.scale, inner, inner * 0.38, 0, Math.PI * 2 * pulse, Math.PI * 2 * (pulse + 0.72));
+  ctx.stroke();
+
+  ctx.fillStyle = portal.color;
+  ctx.font = `950 ${Math.max(11, 13 * point.scale)}px ui-sans-serif, system-ui`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(portal.kind === 'return' ? 'BACK' : 'VIBE', point.x, point.y - 7 * point.scale);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(3, 4, 10, 0.78)';
+  ctx.strokeStyle = portal.color;
+  ctx.shadowBlur = 14;
+  const labelWidth = portal.kind === 'return' ? 104 : 126;
+  const labelHeight = 24;
+  const labelY = point.y - outer * 0.82 - labelHeight;
+  ctx.beginPath();
+  ctx.roundRect(point.x - labelWidth / 2, labelY, labelWidth, labelHeight, 7);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#f7f2dc';
+  ctx.font = '900 11px ui-sans-serif, system-ui';
+  ctx.fillText(portal.label.toUpperCase(), point.x, labelY + labelHeight / 2 + 1);
+  ctx.restore();
+}
+
 function drawMapShard(ctx: CanvasRenderingContext2D, shard: Shard, state: GameState, view: WorldView): void {
   const point = worldToScreen(view, shard);
   const image = getLoadedSprite(VFX_SHEET_SRC);
   const pulse = 1 + Math.sin(state.elapsed * 5 + shard.id) * 0.08;
   const size = 38 * point.scale * pulse;
+  const magnetPreviewRadius = state.player.magnetRadius + 96;
+  const magnetDistance = distance(state.player, shard);
+  const magnetStrength = state.status === 'playing'
+    ? clamp(1 - Math.max(0, magnetDistance - state.player.magnetRadius) / (magnetPreviewRadius - state.player.magnetRadius), 0, 1)
+    : 0;
   ctx.save();
   drawGroundShadow(ctx, point, 15, 5, 0.22);
+
+  if (magnetStrength > 0) {
+    const player = worldToScreen(view, state.player);
+    const shimmer = 0.5 + Math.sin(state.elapsed * 13 + shard.id) * 0.5;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = `rgba(125, 249, 255, ${0.1 + magnetStrength * (0.38 + shimmer * 0.12)})`;
+    ctx.shadowColor = '#7df9ff';
+    ctx.shadowBlur = 10 + magnetStrength * 16;
+    ctx.lineWidth = Math.max(1, 1.5 + magnetStrength * 2.5);
+    ctx.setLineDash([5, 8]);
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y - 8 * point.scale);
+    ctx.lineTo(player.x, player.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = `rgba(255, 207, 92, ${0.2 + magnetStrength * 0.46})`;
+    ctx.beginPath();
+    ctx.ellipse(point.x, point.y, (18 + magnetStrength * 18) * point.scale, (8 + magnetStrength * 9) * point.scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
   ctx.globalCompositeOperation = 'lighter';
   if (image) {
     drawVfxCell(ctx, image, shard.id % 4, 0, point.x, point.y - 10 * point.scale, size, size);
@@ -603,6 +742,119 @@ function drawMapShard(ctx: CanvasRenderingContext2D, shard: Shard, state: GameSt
     ctx.fillStyle = '#7df9ff';
     ctx.fillRect(-size * 0.22, -size * 0.22, size * 0.44, size * 0.44);
   }
+  ctx.restore();
+}
+
+function drawPickupTrails(ctx: CanvasRenderingContext2D, state: GameState, view: WorldView): void {
+  if (state.pickupTrails.length === 0) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const trail of state.pickupTrails) {
+    const progress = clamp(trail.age / trail.ttl, 0, 1);
+    const alpha = 1 - progress;
+    const from = worldToScreen(view, trail.from);
+    const to = worldToScreen(view, trail.to);
+    const headT = clamp(progress * 1.24, 0, 1);
+    const tailT = clamp(headT - 0.42, 0, 1);
+    const tailX = from.x + (to.x - from.x) * tailT;
+    const tailY = from.y + (to.y - from.y) * tailT - 8 * from.scale;
+    const headX = from.x + (to.x - from.x) * headT;
+    const headY = from.y + (to.y - from.y) * headT - 8 * to.scale;
+    const gradient = ctx.createLinearGradient(tailX, tailY, headX, headY);
+    gradient.addColorStop(0, `rgba(125, 249, 255, 0)`);
+    gradient.addColorStop(0.5, `rgba(125, 249, 255, ${alpha * 0.62})`);
+    gradient.addColorStop(1, `rgba(255, 207, 92, ${alpha * 0.9})`);
+    ctx.strokeStyle = gradient;
+    ctx.shadowColor = trail.combo >= 4 ? '#ffcf5c' : '#7df9ff';
+    ctx.shadowBlur = 16 + Math.min(trail.combo, 6) * 3;
+    ctx.lineWidth = Math.max(2, 4 * to.scale + Math.min(trail.combo, 6) * 0.4);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(headX, headY);
+    ctx.stroke();
+    ctx.fillStyle = `rgba(247, 242, 220, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(headX, headY, Math.max(3, 7 * to.scale), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPickupParticles(ctx: CanvasRenderingContext2D, state: GameState, view: WorldView): void {
+  if (state.pickupParticles.length === 0) return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const particle of state.pickupParticles) {
+    const progress = clamp(particle.age / particle.ttl, 0, 1);
+    const alpha = 1 - progress;
+    const point = worldToScreen(view, particle);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = particle.color;
+    ctx.shadowColor = particle.color;
+    ctx.shadowBlur = 12 * alpha;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y - 6 * point.scale, Math.max(1.5, particle.radius * point.scale * (1 - progress * 0.25)), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawScorePopups(ctx: CanvasRenderingContext2D, state: GameState, view: WorldView): void {
+  if (state.scorePopups.length === 0) return;
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const popup of state.scorePopups) {
+    const progress = clamp(popup.age / popup.ttl, 0, 1);
+    const alpha = progress > 0.72 ? clamp((1 - progress) / 0.28, 0, 1) : 1;
+    const point = worldToScreen(view, popup);
+    const y = point.y - 42 * progress - 28 * point.scale;
+    const fontSize = Math.max(14, 19 * point.scale + Math.min(popup.combo, 8));
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = popup.combo >= 4 ? '#ffcf5c' : '#7df9ff';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = popup.combo >= 4 ? '#ffcf5c' : '#f7f2dc';
+    ctx.font = `950 ${fontSize}px ui-sans-serif, system-ui`;
+    ctx.fillText(`+${popup.value}`, point.x, y);
+    if (popup.combo >= 2) {
+      ctx.fillStyle = '#7df9ff';
+      ctx.font = `900 ${Math.max(11, fontSize * 0.58)}px ui-sans-serif, system-ui`;
+      ctx.fillText(`COMBO x${popup.combo}`, point.x, y + fontSize * 0.75);
+    }
+  }
+  ctx.restore();
+}
+
+function drawComboBadge(ctx: CanvasRenderingContext2D, state: GameState, view: WorldView): void {
+  if (state.pickupCombo.count < 2 || state.pickupCombo.timer <= 0) return;
+
+  const point = worldToScreen(view, state.player);
+  const pulse = 1 + state.pickupCombo.pulse * 0.18;
+  const alpha = clamp(state.pickupCombo.timer / 0.32, 0, 1);
+  const width = 104 * pulse;
+  const height = 32 * pulse;
+  const x = point.x - width / 2;
+  const y = point.y - 82 * point.scale - height / 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = '#ffcf5c';
+  ctx.shadowBlur = 24;
+  ctx.fillStyle = 'rgba(3, 4, 10, 0.78)';
+  ctx.strokeStyle = '#ffcf5c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffcf5c';
+  ctx.font = `950 ${15 * pulse}px ui-sans-serif, system-ui`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`COMBO x${state.pickupCombo.count}`, point.x, y + height / 2);
   ctx.restore();
 }
 
@@ -1076,6 +1328,13 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.arc(x + enemy.x * sx, y + enemy.y * sy, 4, 0, Math.PI * 2);
     ctx.fill();
   }
+  for (const portal of state.portals) {
+    ctx.strokeStyle = portal.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + portal.x * sx, y + portal.y * sy, portal.kind === 'return' ? 5 : 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.translate(x + state.player.x * sx, y + state.player.y * sy);
   ctx.rotate(state.player.heading);
   ctx.fillStyle = '#f7f2dc';
@@ -1085,6 +1344,51 @@ function drawMinimap(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.lineTo(-6, 6);
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
+}
+
+function drawRunHud(ctx: CanvasRenderingContext2D, state: GameState): void {
+  const x = 18;
+  const y = 18;
+  const w = 226;
+  const h = 70;
+  const clockLabel = state.status === 'ready' ? 'START' : state.graceRemaining > 0 ? 'SAFE' : 'CLOCK';
+  const clockValue = state.status === 'ready'
+    ? 'READY'
+    : String(Math.max(0, Math.ceil(state.graceRemaining > 0 ? state.graceRemaining : state.waveTimeRemaining)));
+  const comboValue = state.pickupCombo.count >= 2 ? `x${state.pickupCombo.count}` : state.pickupCombo.best > 0 ? `B${state.pickupCombo.best}` : '-';
+  const blastValue = state.player.blastCooldown <= 0 ? 'RDY' : `${Math.ceil(state.player.blastCooldown * 10) / 10}`;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(3, 4, 10, 0.72)';
+  ctx.strokeStyle = 'rgba(125, 249, 255, 0.42)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#7df9ff';
+  ctx.font = '900 11px ui-sans-serif, system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('LOOPFORGE', x + 14, y + 18);
+
+  const stats = [
+    ['SCORE', String(state.score)],
+    ['WAVE', String(state.wave)],
+    [clockLabel, clockValue],
+    ['BLAST', blastValue],
+    ['COMBO', comboValue],
+  ];
+  stats.forEach(([label, value], index) => {
+    const colX = x + 14 + index * 41;
+    ctx.fillStyle = '#92a0bf';
+    ctx.font = '800 8px ui-sans-serif, system-ui';
+    ctx.fillText(label, colX, y + 39);
+    ctx.fillStyle = label === 'COMBO' && comboValue !== '-' ? '#ffcf5c' : '#f7f2dc';
+    ctx.font = '950 15px ui-sans-serif, system-ui';
+    ctx.fillText(value, colX, y + 57);
+  });
   ctx.restore();
 }
 
@@ -1216,6 +1520,7 @@ function draw(ctx: CanvasRenderingContext2D, state: GameState): void {
   clipToWorldView(ctx, view);
   drawMapTargeting(ctx, state, view);
   drawThreatProximityField(ctx, state, view);
+  drawPickupTrails(ctx, state, view);
 
   const renderables: Array<{ y: number; order: number; draw: () => void }> = [
     {
@@ -1224,6 +1529,13 @@ function draw(ctx: CanvasRenderingContext2D, state: GameState): void {
       draw: () => drawMapPlayer(ctx, state, view),
     },
   ];
+  state.portals.forEach((portal) => {
+    renderables.push({
+      y: screenDepth(view, portal),
+      order: -1,
+      draw: () => drawMapPortal(ctx, portal, state, view),
+    });
+  });
   state.shards.forEach((shard) => {
     renderables.push({
       y: screenDepth(view, shard),
@@ -1248,6 +1560,9 @@ function draw(ctx: CanvasRenderingContext2D, state: GameState): void {
   renderables
     .sort((a, b) => a.y - b.y || a.order - b.order)
     .forEach((item) => item.draw());
+  drawPickupParticles(ctx, state, view);
+  drawScorePopups(ctx, state, view);
+  drawComboBadge(ctx, state, view);
 
   ctx.restore();
   drawThreatEdgeArrows(ctx, state, view);
@@ -1255,13 +1570,25 @@ function draw(ctx: CanvasRenderingContext2D, state: GameState): void {
 
   drawScreenFlash(ctx, state);
   drawThreatVignette(ctx, state);
+  drawRunHud(ctx, state);
+  drawBossHealthPanel(ctx, state);
+  drawThreatPanel(ctx, state);
   drawMinimap(ctx, state);
   drawNotices(ctx, state);
 }
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const stateRef = useRef<GameState>(createInitialState(DEFAULT_VARIANT));
+  const portalContext = useMemo(() => readPortalQueryContext(), []);
+  const initialState = useMemo(
+    () => createInitialState(DEFAULT_VARIANT, {
+      portalArrival: portalContext.isPortalArrival,
+      returnPortal: portalContext.isPortalArrival && Boolean(portalContext.returnRef),
+    }),
+    [portalContext],
+  );
+  const stateRef = useRef<GameState>(initialState);
+  const portalRedirectedRef = useRef(false);
   const [snapshot, setSnapshot] = useState<GameState>(() => snapshotState(stateRef.current));
   const upgrades = useMemo(() => chooseUpgradeOptions(snapshot, DEFAULT_VARIANT), [snapshot.status, snapshot.wave]);
 
@@ -1295,6 +1622,12 @@ export default function App() {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
       tickGame(state, inputVector(), dt);
+      const portalTrigger = consumePortalTrigger(state);
+      if (portalTrigger && !portalRedirectedRef.current) {
+        portalRedirectedRef.current = true;
+        window.location.assign(buildPortalRedirect(portalTrigger, portalContext, state));
+        return;
+      }
       const ctx = canvasRef.current?.getContext('2d');
       if (ctx) draw(ctx, state);
       setSnapshot(snapshotState(state));
@@ -1306,7 +1639,11 @@ export default function App() {
 
   const restart = () => {
     keys.clear();
-    stateRef.current = createInitialState(DEFAULT_VARIANT);
+    stateRef.current = createInitialState(DEFAULT_VARIANT, {
+      portalArrival: portalContext.isPortalArrival,
+      returnPortal: portalContext.isPortalArrival && Boolean(portalContext.returnRef),
+    });
+    portalRedirectedRef.current = false;
     syncSnapshot();
   };
 
@@ -1327,48 +1664,10 @@ export default function App() {
     syncSnapshot();
   };
 
-  const activeJudges = snapshot.enemies.filter((enemy) => enemy.status === 'chasing').length;
-  const defeatedJudges = snapshot.enemies.length - activeJudges;
-  const blastReady = snapshot.player.blastCooldown <= 0;
-  const isSafe = snapshot.status === 'playing' && snapshot.graceRemaining > 0;
-  const targetJudge = nearestChasingEnemy(snapshot);
   const latestNotice = snapshot.notices[0];
 
   return (
     <main className="shell">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">Hermes Game Lab / Vibe Jam 2026</p>
-          <h1>LoopForge</h1>
-        </div>
-        <p>Camera-follow arena chase where Vibe Jam judge monsters lock on, take damage, respawn, and adapt after every defeat.</p>
-      </section>
-
-      <section className="hud" aria-label="game stats">
-        <div><span>Score</span><strong>{snapshot.score}</strong></div>
-        <div><span>Wave</span><strong>{snapshot.wave}</strong></div>
-        <div><span>{snapshot.status === 'ready' ? 'Start' : isSafe ? 'Safe' : 'Clock'}</span><strong>{snapshot.status === 'ready' ? 'READY' : isSafe ? Math.ceil(snapshot.graceRemaining) : Math.max(0, Math.ceil(snapshot.waveTimeRemaining))}</strong></div>
-        <div><span>Blast</span><strong>{blastReady ? 'READY' : Math.ceil(snapshot.player.blastCooldown * 10) / 10}</strong></div>
-        <div><span>Judges</span><strong>{activeJudges}/{snapshot.enemies.length}</strong></div>
-        <div><span>Target</span><strong>{targetJudge?.judge.handle ?? 'NONE'}</strong></div>
-      </section>
-
-      <section className="bossDock" aria-label="judge boss status">
-        {snapshot.enemies.map((enemy) => (
-          <article key={enemy.id} className="bossCard" data-target={targetJudge?.id === enemy.id} style={judgeStyle(enemy)}>
-            <div className="bossSigil">{enemy.judge.signal}</div>
-            <div className="bossMeta">
-              <strong>{enemy.judge.handle}</strong>
-              <span>{enemy.judge.bossTitle}</span>
-              <div className="bossHealth" aria-label={`${enemy.judge.handle} health`}>
-                <span style={{ width: `${healthRatio(enemy) * 100}%` }} />
-              </div>
-            </div>
-            <small>{enemy.status === 'chasing' ? learnedLabel(enemy) : `rebuilding in ${Math.max(0, Math.ceil(enemy.respawnTimer))}`}</small>
-          </article>
-        ))}
-      </section>
-
       <div className="gameWrap">
         <canvas
           ref={canvasRef}
@@ -1383,9 +1682,19 @@ export default function App() {
         />
         {latestNotice && <div className="srOnly" aria-live="polite">{latestNotice.title}. {latestNotice.detail}</div>}
         {snapshot.status !== 'playing' && (
-          <div className="overlay">
-            <h2>{snapshot.status === 'ready' ? 'Enter Arena' : snapshot.status === 'upgrade' ? 'Mutation choice' : 'Prototype roasted'}</h2>
-            <p>{snapshot.message}</p>
+          <div className={`overlay overlay-${snapshot.status}`}>
+            {snapshot.status === 'upgrade' ? (
+              <div className="mutationHeader">
+                <span>Wave {snapshot.wave} clear</span>
+                <h2>Choose Mutation</h2>
+                <p>{snapshot.message}</p>
+              </div>
+            ) : (
+              <>
+                <h2>{snapshot.status === 'ready' ? 'Enter Arena' : 'Prototype roasted'}</h2>
+                <p>{snapshot.message}</p>
+              </>
+            )}
             {snapshot.status === 'ready' && (
               <div className="bossIntroGrid" aria-label="Vibe Jam judge bosses">
                 {JUDGE_CHASERS.map((judge) => (
@@ -1402,9 +1711,12 @@ export default function App() {
             ) : snapshot.status === 'upgrade' ? (
               <div className="upgradeGrid">
                 {upgrades.map((upgrade) => (
-                  <button key={upgrade.id} onClick={() => { applyUpgradeAndStartNextWave(stateRef.current, upgrade); syncSnapshot(); }}>
+                  <button key={upgrade.id} style={upgradeStyle(upgrade)} onClick={() => { applyUpgradeAndStartNextWave(stateRef.current, upgrade); syncSnapshot(); }}>
+                    <span className="upgradeIcon">{upgrade.icon ?? 'UP'}</span>
+                    <small>{upgrade.tag ?? 'mutation'}</small>
                     <strong>{upgrade.title}</strong>
                     <span>{upgrade.description}</span>
+                    <em>Next wave: {upgrade.nextWave ?? 'prototype altered'}</em>
                   </button>
                 ))}
               </div>
@@ -1412,14 +1724,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      <section className="labPanel">
-        <div>
-          <h2>{DEFAULT_VARIANT.name}</h2>
-          <p>{DEFAULT_VARIANT.hypothesis}</p>
-        </div>
-        <div className="controls">Live arena feed: {activeJudges} active bosses, {defeatedJudges} recalibrating, target lock on {targetJudge?.judge.handle ?? 'no judge'}. The camera follows the player through the arena while judge monsters close in from the world edges.</div>
-      </section>
     </main>
   );
 }

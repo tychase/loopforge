@@ -99,6 +99,10 @@ Rendering:
 - Entities use Y-based scale, elliptical shadows, and screen-Y render sorting.
 - Judge and player presentation is billboard-style.
 - UI remains separate from transformed world rendering.
+- Shard pickups now create shard-to-player trails, small burst particles, score popups, magnet preview tethers, and a combo/streak HUD readout.
+- The arena includes a canvas-drawn `Vibe Jam Portal` exit portal.
+- Portal arrivals with `?portal=true` skip the start overlay, spawn the player into the arena, and create a nearby return portal when `ref` is present.
+- The page chrome above and below the arena has been removed. Essential run stats now render inside the canvas HUD so the arena is the first meaningful viewport.
 
 Threat feedback:
 
@@ -114,11 +118,10 @@ Make the game look and feel professional before adding complex mechanics.
 
 The next feature patches should stay small and high-impact:
 
-1. Shard collection juice and combo feedback.
-2. Upgrade choice polish and stronger build identity.
-3. Judge personality pass: each judge gets one simple readable behavior.
-4. Arena visual pass: portals, lab boundary props, parallax particles, better floor lighting.
-5. Submission pass: fast load, widget, mobile-ish check, no console errors, clear first screen.
+1. Upgrade choice polish and stronger build identity.
+2. Judge personality pass: each judge gets one simple readable behavior.
+3. Arena visual pass: portals, lab boundary props, parallax particles, better floor lighting.
+4. Submission pass: fast load, widget, mobile-ish check, no console errors, clear first screen.
 
 Avoid for now:
 
@@ -130,22 +133,55 @@ Avoid for now:
 - complex procedural generation
 - heavy assets that slow first load
 
-## Next Recommended Patch
+## Recent Patch
 
-Do the shard collection juice pass next.
+Shard collection juice, upgrade moment polish, and Vibe Jam portal support are implemented.
 
-Scope:
+Added:
 
 - pickup trails from shard to player
 - score popups
 - small burst particles
-- stronger magnet visual when a shard is within pickup range
+- stronger magnet preview visual when a shard is close to pickup range
 - combo/streak counter for fast pickups
-- tests only for any new state transitions, not for every visual particle
+- focused test coverage for pickup feedback and combo expiry
+- more dramatic upgrade overlay with mutation tags, sigils, and next-wave language
+- exit portal collision for `https://vibej.am/portal/2026`
+- portal arrival support for `?portal=true`
+- return portal support when a `ref` query parameter exists
+- arena-first layout with compact in-canvas score/wave/clock/blast/combo HUD
+- focused test coverage for exit/return portal triggers
+
+## Next Recommended Patch
+
+Do a compact arena visual pass next.
+
+Scope:
+
+- animated boundary lights
+- portal staging polish
+- corner lab machinery silhouettes
+- subtle parallax lab particles
+- keep gameplay collision unchanged
 
 Reason:
 
-The player needs a satisfying reward beat every few seconds. This is the fastest path from "prototype" to "one more run."
+The core reward, upgrade, and portal loops now exist. The fastest route to "impressive" is making the arena feel more staged and intentional without adding systems risk.
+
+## Submission Requirements Status
+
+- Required widget snippet is present in `index.html`:
+
+```html
+<script async src="https://vibej.am/2026/widget.js"></script>
+```
+
+- Exit portal is implemented in the arena and redirects to `https://vibej.am/portal/2026`.
+- Exit portal sends continuity params including `username`, `color`, `speed`, and `ref`.
+- `ref` is built from the current game origin/path so final deployment should use one canonical domain.
+- Receiving `?portal=true` starts the game immediately with no start overlay.
+- Receiving `?portal=true&ref=...` adds a nearby return portal that redirects back to the previous game while preserving continuity params.
+- Remaining submission responsibility: deploy to one stable domain and use that single domain as the submitted URL.
 
 ## Fresh Chat Prompt
 

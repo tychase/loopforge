@@ -28,11 +28,15 @@ Already in place:
 - screen-Y depth sorting
 - billboard player/judges
 - shard collection
+- shard collection trails, score popups, burst particles, magnet preview tethers, and combo/streak feedback
 - shard blast combat
 - judge health/defeat/respawn
 - local per-match judge learning
 - wave timer
 - upgrade choice
+- polished upgrade mutation overlay with tags, sigils, and next-wave language
+- Vibe Jam exit portal and portal-arrival return portal support
+- arena-first layout with essential HUD inside the canvas
 - threat warning rings, lunge aura, edge arrows, and danger pulse
 - tests/build passing
 
@@ -121,7 +125,9 @@ Implement only one behavior at a time and keep each behavior visually obvious.
 
 Purpose: make the reward loop satisfying every few seconds.
 
-Add:
+Status: implemented.
+
+Added:
 
 - pickup trails
 - burst particles
@@ -133,12 +139,28 @@ Add:
 
 Purpose: make wave completion feel like a mutation moment.
 
-Add:
+Status: implemented.
+
+Added:
 
 - more dramatic upgrade overlay
 - clear build language
-- upgrade icons or visual marks
-- upgrades that visibly change the next wave
+- upgrade sigils and tags
+- next-wave effect language
+
+### Patch 2B: Vibe Jam Portal Support
+
+Purpose: satisfy optional webring continuity while preserving instant play.
+
+Status: implemented.
+
+Added:
+
+- required widget is present in `index.html`
+- exit portal redirects to `https://vibej.am/portal/2026`
+- portal handoff params are preserved and forwarded
+- `?portal=true` starts the game immediately
+- `?portal=true&ref=...` adds a return portal near the spawn point
 
 ### Patch 3: Judge Personality Pass
 

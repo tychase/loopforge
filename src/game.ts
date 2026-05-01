@@ -69,10 +69,54 @@ export type CombatNotice = {
   ttl: number;
   intensity: number;
 };
+export type PickupTrail = {
+  id: number;
+  from: Vec;
+  to: Vec;
+  value: number;
+  combo: number;
+  age: number;
+  ttl: number;
+};
+export type PickupParticle = Vec & {
+  id: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  color: string;
+  age: number;
+  ttl: number;
+};
+export type ScorePopup = Vec & {
+  id: number;
+  value: number;
+  combo: number;
+  age: number;
+  ttl: number;
+};
+export type PickupCombo = {
+  count: number;
+  best: number;
+  timer: number;
+  pulse: number;
+};
+export type GamePortalKind = 'exit' | 'return';
+export type GamePortal = Vec & {
+  id: string;
+  kind: GamePortalKind;
+  label: string;
+  radius: number;
+  color: string;
+  secondaryColor: string;
+};
 export type Upgrade = {
   id: string;
   title: string;
   description: string;
+  icon?: string;
+  tag?: string;
+  nextWave?: string;
+  color?: string;
   apply: (state: GameState) => void;
 };
 
@@ -102,6 +146,13 @@ export type GameState = {
   status: Status;
   message: string;
   notices: CombatNotice[];
+  pickupTrails: PickupTrail[];
+  pickupParticles: PickupParticle[];
+  scorePopups: ScorePopup[];
+  pickupCombo: PickupCombo;
+  portals: GamePortal[];
+  portalCooldown: number;
+  pendingPortal?: GamePortalKind;
   screenShake: number;
   hitFlash: number;
   nextId: number;
@@ -119,6 +170,11 @@ export const DEFAULT_VARIANT: GameVariant = {
   seed: 1337,
 };
 
+export type InitialStateOptions = {
+  portalArrival?: boolean;
+  returnPortal?: boolean;
+};
+
 const BLAST_COOLDOWN = 0.42;
 const BLAST_SPEED = 720;
 const BLAST_DAMAGE = 34;
@@ -126,13 +182,19 @@ const BLAST_MAX_AGE = 0.9;
 const JUDGE_RESPAWN_SECONDS = 2.4;
 const START_GRACE_SECONDS = 4;
 const WAVE_GRACE_SECONDS = 2.2;
+const PORTAL_ARRIVAL_GRACE_SECONDS = 10;
+const PICKUP_COMBO_SECONDS = 1.15;
+const PICKUP_TRAIL_SECONDS = 0.46;
+const PICKUP_PARTICLE_SECONDS = 0.62;
+const SCORE_POPUP_SECONDS = 0.9;
+const PORTAL_COOLDOWN_SECONDS = 1.1;
 
 const UPGRADES: Upgrade[] = [
-  { id: 'swift-boots', title: 'Vibe Sneakers', description: '+12% sprint speed', apply: (state) => { state.player.speed *= 1.12; } },
-  { id: 'wider-magnet', title: 'Clout Magnet', description: '+32 shard pickup radius', apply: (state) => { state.player.magnetRadius += 32; } },
-  { id: 'soft-shield', title: 'PR Spin', description: 'Absorb one judge collision', apply: (state) => { state.player.shield += 1; } },
-  { id: 'brighter-shards', title: 'Shinier Demo', description: '+1 point per visible shard', apply: (state) => { state.shards.forEach((shard) => shard.value += 1); } },
-  { id: 'calmer-loop', title: 'Deadline Extension', description: '+4 seconds next wave', apply: (state) => { state.waveTimeRemaining += 4; } },
+  { id: 'swift-boots', title: 'Vibe Sneakers', description: '+12% sprint speed', icon: 'SPD', tag: 'movement', nextWave: 'Kite judges harder', color: '#7df9ff', apply: (state) => { state.player.speed *= 1.12; } },
+  { id: 'wider-magnet', title: 'Clout Magnet', description: '+32 shard pickup radius', icon: 'MAG', tag: 'collection', nextWave: 'Pull shards sooner', color: '#ffcf5c', apply: (state) => { state.player.magnetRadius += 32; } },
+  { id: 'soft-shield', title: 'PR Spin', description: 'Absorb one judge collision', icon: 'PR', tag: 'defense', nextWave: 'One mistake forgiven', color: '#9cff8f', apply: (state) => { state.player.shield += 1; } },
+  { id: 'brighter-shards', title: 'Shinier Demo', description: '+1 point per visible shard', icon: 'PTS', tag: 'scoring', nextWave: 'Every pickup pays more', color: '#ff4dca', apply: (state) => { state.shards.forEach((shard) => shard.value += 1); } },
+  { id: 'calmer-loop', title: 'Deadline Extension', description: '+4 seconds next wave', icon: 'T+', tag: 'timing', nextWave: 'More room to route', color: '#b9c3df', apply: (state) => { state.waveTimeRemaining += 4; } },
 ];
 
 export function isNavigationKey(key: string): boolean {
@@ -159,6 +221,34 @@ function createExperience(): JudgeExperience {
   };
 }
 
+function createPortals(variant: GameVariant, includeReturnPortal: boolean): GamePortal[] {
+  const portals: GamePortal[] = [
+    {
+      id: 'vibe-jam-exit',
+      kind: 'exit',
+      label: 'Vibe Jam Portal',
+      x: variant.arena.width - 190,
+      y: variant.arena.height - 190,
+      radius: 42,
+      color: '#ff4dca',
+      secondaryColor: '#7df9ff',
+    },
+  ];
+  if (includeReturnPortal) {
+    portals.unshift({
+      id: 'vibe-jam-return',
+      kind: 'return',
+      label: 'Return Portal',
+      x: variant.arena.width / 2 - 96,
+      y: variant.arena.height / 2,
+      radius: 42,
+      color: '#ffcf5c',
+      secondaryColor: '#9cff8f',
+    });
+  }
+  return portals;
+}
+
 function pushCombatNotice(
   state: GameState,
   notice: Omit<CombatNotice, 'id' | 'age'>,
@@ -174,12 +264,92 @@ function advanceCombatFeedback(state: GameState, dt: number): void {
     .filter((notice) => notice.age < notice.ttl);
 }
 
-export function createInitialState(variant: GameVariant = DEFAULT_VARIANT): GameState {
+function advancePickupFeedback(state: GameState, dt: number): void {
+  state.pickupTrails = state.pickupTrails
+    .map((trail) => ({ ...trail, age: trail.age + dt }))
+    .filter((trail) => trail.age < trail.ttl);
+  state.pickupParticles = state.pickupParticles
+    .map((particle) => ({
+      ...particle,
+      x: particle.x + particle.vx * dt,
+      y: particle.y + particle.vy * dt,
+      vy: particle.vy + 80 * dt,
+      age: particle.age + dt,
+    }))
+    .filter((particle) => particle.age < particle.ttl);
+  state.scorePopups = state.scorePopups
+    .map((popup) => ({ ...popup, age: popup.age + dt }))
+    .filter((popup) => popup.age < popup.ttl);
+  state.pickupCombo.timer = Math.max(0, state.pickupCombo.timer - dt);
+  state.pickupCombo.pulse = Math.max(0, state.pickupCombo.pulse - dt * 4.8);
+  if (state.pickupCombo.timer === 0) {
+    state.pickupCombo.count = 0;
+  }
+}
+
+function recordShardPickup(state: GameState, shard: Shard): void {
+  const combo = state.pickupCombo.timer > 0 ? state.pickupCombo.count + 1 : 1;
+  state.pickupCombo = {
+    count: combo,
+    best: Math.max(state.pickupCombo.best, combo),
+    timer: PICKUP_COMBO_SECONDS,
+    pulse: 1,
+  };
+  state.pickupTrails = [
+    ...state.pickupTrails,
+    {
+      id: state.nextId++,
+      from: { x: shard.x, y: shard.y },
+      to: { x: state.player.x, y: state.player.y },
+      value: shard.value,
+      combo,
+      age: 0,
+      ttl: PICKUP_TRAIL_SECONDS,
+    },
+  ].slice(-18);
+  state.scorePopups = [
+    ...state.scorePopups,
+    {
+      id: state.nextId++,
+      x: state.player.x,
+      y: state.player.y - 24,
+      value: shard.value,
+      combo,
+      age: 0,
+      ttl: SCORE_POPUP_SECONDS,
+    },
+  ].slice(-8);
+
+  const particleCount = combo >= 5 ? 9 : 6;
+  const particles: PickupParticle[] = [];
+  for (let i = 0; i < particleCount; i += 1) {
+    const seed = shard.id * 37 + combo * 19 + i * 11;
+    const angle = seededUnit(seed) * Math.PI * 2;
+    const speed = 44 + seededUnit(seed + 5) * 78 + Math.min(combo, 8) * 4;
+    particles.push({
+      id: state.nextId++,
+      x: state.player.x,
+      y: state.player.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 18,
+      radius: 3 + seededUnit(seed + 9) * 4,
+      color: i % 3 === 0 ? '#ffcf5c' : i % 3 === 1 ? '#7df9ff' : '#ff4dca',
+      age: 0,
+      ttl: PICKUP_PARTICLE_SECONDS + seededUnit(seed + 13) * 0.2,
+    });
+  }
+  state.pickupParticles = [...state.pickupParticles, ...particles].slice(-54);
+  state.screenShake = Math.max(state.screenShake, combo >= 4 ? 2.4 : 1.1);
+}
+
+export function createInitialState(variant: GameVariant = DEFAULT_VARIANT, options: InitialStateOptions = {}): GameState {
+  const portals = createPortals(variant, options.returnPortal === true);
+  const returnPortal = portals.find((portal) => portal.kind === 'return');
   const state: GameState = {
     variant,
     player: {
-      x: variant.arena.width / 2,
-      y: variant.arena.height / 2,
+      x: returnPortal ? returnPortal.x + 92 : variant.arena.width / 2,
+      y: returnPortal ? returnPortal.y : variant.arena.height / 2,
       radius: 18,
       speed: 255,
       turnSpeed: 3.15,
@@ -195,15 +365,37 @@ export function createInitialState(variant: GameVariant = DEFAULT_VARIANT): Game
     wave: 1,
     elapsed: 0,
     waveTimeRemaining: variant.waveSeconds,
-    graceRemaining: START_GRACE_SECONDS,
-    status: 'ready',
-    message: 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and blast the nearest active boss.',
+    graceRemaining: options.portalArrival ? PORTAL_ARRIVAL_GRACE_SECONDS : START_GRACE_SECONDS,
+    status: options.portalArrival ? 'playing' : 'ready',
+    message: options.portalArrival
+      ? 'Portal handoff received. The arena is live and the return portal is behind you.'
+      : 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and blast the nearest active boss.',
     notices: [],
+    pickupTrails: [],
+    pickupParticles: [],
+    scorePopups: [],
+    pickupCombo: { count: 0, best: 0, timer: 0, pulse: 0 },
+    portals,
+    portalCooldown: options.portalArrival ? PORTAL_COOLDOWN_SECONDS : 0,
     screenShake: 0,
     hitFlash: 0,
     nextId: 1,
   };
   refillWave(state);
+  if (options.portalArrival) {
+    const openingTarget = nearestChasingEnemy(state);
+    if (openingTarget) {
+      state.player.heading = Math.atan2(openingTarget.y - state.player.y, openingTarget.x - state.player.x);
+    }
+    pushCombatNotice(state, {
+      kind: 'wave',
+      title: 'Portal arrival',
+      detail: options.returnPortal ? 'Return portal armed. The judges are staged.' : 'The judges are staged.',
+      color: '#ffcf5c',
+      ttl: 2.6,
+      intensity: 0.65,
+    });
+  }
   return state;
 }
 
@@ -221,6 +413,10 @@ export function refillWave(state: GameState): void {
     return enemy;
   });
   state.blasts = [];
+  state.pickupTrails = [];
+  state.pickupParticles = [];
+  state.scorePopups = [];
+  state.pickupCombo = { ...state.pickupCombo, count: 0, timer: 0, pulse: 0 };
   state.waveTimeRemaining = state.variant.waveSeconds;
 }
 
@@ -256,17 +452,28 @@ export function distance(a: Vec, b: Vec): number {
 }
 
 export function collectShard(state: GameState): boolean {
-  const before = state.shards.length;
-  state.shards = state.shards.filter((shard) => {
+  const remaining: Shard[] = [];
+  const collected: Shard[] = [];
+  for (const shard of state.shards) {
     const d = distance(state.player, shard);
     if (d <= state.player.radius + shard.radius || d <= state.player.magnetRadius) {
       state.score += shard.value;
-      state.message = `Vibe shard banked. ${state.shards.length - 1} left before the judges refresh their scorecards.`;
-      return false;
+      collected.push(shard);
+    } else {
+      remaining.push(shard);
     }
-    return true;
-  });
-  return state.shards.length !== before;
+  }
+  if (collected.length === 0) return false;
+
+  state.shards = remaining;
+  for (const shard of collected) {
+    recordShardPickup(state, shard);
+  }
+  const latestCombo = state.pickupCombo.count;
+  state.message = collected.length === 1
+    ? `Vibe shard banked. ${remaining.length} left before the judges refresh their scorecards.`
+    : `${collected.length} vibe shards banked. Combo x${latestCombo}. ${remaining.length} left.`;
+  return true;
 }
 
 export function spawnEnemyForWave(variant: GameVariant, wave: number, index: number): Enemy {
@@ -499,6 +706,34 @@ export function checkCollisions(state: GameState): void {
   }
 }
 
+export function checkPortalCollisions(state: GameState): void {
+  if (state.status !== 'playing' || state.portalCooldown > 0 || state.pendingPortal) return;
+  const portal = state.portals.find((candidate) => distance(state.player, candidate) <= state.player.radius + candidate.radius);
+  if (!portal) return;
+
+  state.pendingPortal = portal.kind;
+  state.portalCooldown = PORTAL_COOLDOWN_SECONDS;
+  state.screenShake = Math.max(state.screenShake, 8);
+  state.hitFlash = Math.max(state.hitFlash, 0.38);
+  state.message = portal.kind === 'return'
+    ? 'Return portal opened. Sending the player back through the Vibe Jam chain.'
+    : 'Vibe Jam Portal opened. Sending the run to the next 2026 game.';
+  pushCombatNotice(state, {
+    kind: 'wave',
+    title: portal.kind === 'return' ? 'Return portal' : 'Vibe Jam Portal',
+    detail: portal.kind === 'return' ? 'Continuity handoff back to the previous game.' : 'Continuity handoff to the 2026 portal.',
+    color: portal.color,
+    ttl: 1.8,
+    intensity: 0.9,
+  });
+}
+
+export function consumePortalTrigger(state: GameState): GamePortalKind | undefined {
+  const portal = state.pendingPortal;
+  state.pendingPortal = undefined;
+  return portal;
+}
+
 function normalizeAngle(angle: number): number {
   while (angle < -Math.PI) angle += Math.PI * 2;
   while (angle > Math.PI) angle -= Math.PI * 2;
@@ -507,6 +742,8 @@ function normalizeAngle(angle: number): number {
 
 export function tickGame(state: GameState, input: Vec, dt: number): void {
   advanceCombatFeedback(state, dt);
+  advancePickupFeedback(state, dt);
+  state.portalCooldown = Math.max(0, state.portalCooldown - dt);
   if (state.status !== 'playing') return;
   state.elapsed += dt;
   state.player.blastCooldown = Math.max(0, state.player.blastCooldown - dt);
@@ -521,6 +758,7 @@ export function tickGame(state: GameState, input: Vec, dt: number): void {
   clampPlayerToArena(state);
   collectShard(state);
   updateShardBlasts(state, dt);
+  checkPortalCollisions(state);
 
   if (state.graceRemaining > 0) {
     const previousGrace = state.graceRemaining;
