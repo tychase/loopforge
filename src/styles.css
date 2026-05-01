@@ -135,12 +135,22 @@ canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
   left: 50%;
   width: min(430px, calc(100% - 420px));
   min-width: 300px;
-  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
   transform: translateX(-50%);
   border-color: color-mix(in srgb, var(--judge-color) 70%, transparent);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.25),
+    0 0 28px color-mix(in srgb, var(--judge-color) 22%, transparent);
 }
 
-.bossPanel div:first-child {
+.bossPanelBody {
+  min-width: 0;
+}
+
+.bossPanelBody > div:first-child {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -163,6 +173,65 @@ canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
   margin-top: 3px;
 }
 
+.bossPortrait {
+  position: relative;
+  width: 66px;
+  height: 66px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--judge-color) 78%, transparent);
+  border-radius: 8px;
+  background: #03040a;
+  box-shadow:
+    inset 0 0 18px rgba(255, 255, 255, 0.08),
+    0 0 20px color-mix(in srgb, var(--judge-color) 36%, transparent);
+  transform-origin: center;
+  animation: bossPortraitMenace 2.6s ease-in-out infinite;
+}
+
+.bossPortrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(1.15) saturate(1.15) brightness(0.88)
+    drop-shadow(0 0 10px color-mix(in srgb, var(--judge-color) 54%, transparent));
+}
+
+.bossPortrait::before,
+.bossPortrait::after,
+.bossPortrait span {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.bossPortrait::before {
+  inset: 0;
+  background:
+    radial-gradient(circle at 52% 38%, rgba(255, 35, 80, 0.16), transparent 28%),
+    linear-gradient(135deg, rgba(255, 207, 92, 0.24), transparent 34%),
+    linear-gradient(0deg, transparent 0 46%, rgba(255, 255, 255, 0.16) 48% 50%, transparent 52% 100%);
+  mix-blend-mode: screen;
+  opacity: 0.8;
+}
+
+.bossPortrait::after {
+  inset: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.55);
+}
+
+.bossPortrait span {
+  width: 44px;
+  height: 3px;
+  left: -18px;
+  top: 18px;
+  background: #ff315c;
+  box-shadow: 0 0 12px #ff315c;
+  transform: rotate(-18deg);
+  animation: bossPortraitGlint 2.1s ease-in-out infinite;
+}
+
 .bossHealth {
   height: 10px;
   margin-top: 8px;
@@ -174,6 +243,17 @@ canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
   display: block;
   height: 100%;
   background: linear-gradient(90deg, var(--judge-color), #9cff8f);
+}
+
+@keyframes bossPortraitMenace {
+  0%, 100% { transform: translateY(0) rotate(-0.6deg) scale(1); }
+  50% { transform: translateY(-2px) rotate(0.8deg) scale(1.035); }
+}
+
+@keyframes bossPortraitGlint {
+  0%, 32% { opacity: 0; transform: translateX(0) rotate(-18deg); }
+  44% { opacity: 0.9; }
+  62%, 100% { opacity: 0; transform: translateX(100px) rotate(-18deg); }
 }
 
 .threatPanel {
@@ -387,31 +467,71 @@ canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
 .bossIntroGrid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-  width: min(850px, 88vw);
+  gap: 10px;
+  width: min(920px, 90vw);
   margin: 0 auto;
 }
 
 .introBoss {
   min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 7px;
   border: 1px solid color-mix(in srgb, var(--judge-color) 62%, transparent);
   border-radius: 8px;
-  padding: 12px 8px;
+  padding: 8px;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--judge-color) 20%, transparent), color-mix(in srgb, var(--judge-alt) 12%, transparent)),
     rgba(5, 7, 17, 0.86);
+  box-shadow:
+    inset 0 0 22px rgba(255, 255, 255, 0.03),
+    0 0 22px color-mix(in srgb, var(--judge-color) 16%, transparent);
 }
 
-.introBoss strong {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  margin: 0 auto 8px;
+.introBossPortrait {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  width: 100%;
   border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--judge-color) 62%, transparent);
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--judge-color) 28%, transparent), transparent 54%),
+    rgba(3, 4, 10, 0.92);
+}
+
+.introBossPortrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.12) contrast(1.08);
+}
+
+.introBossPortrait::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 40%, rgba(3, 4, 10, 0.72)),
+    linear-gradient(135deg, color-mix(in srgb, var(--judge-color) 20%, transparent), transparent 54%);
+  pointer-events: none;
+}
+
+.introBossPortrait strong {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  z-index: 1;
+  min-width: 34px;
+  padding: 5px 6px;
+  border-radius: 6px;
   color: #03040a;
   background: var(--judge-color);
-  font-size: 14px;
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--judge-color) 62%, transparent);
 }
 
 .introBoss span,
@@ -524,6 +644,30 @@ canvas:focus { box-shadow: 0 0 0 3px rgba(125, 249, 255, 0.24); }
   .bossIntroGrid,
   .upgradeGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bossIntroGrid {
+    width: min(540px, 92vw);
+  }
+
+  .introBoss {
+    grid-template-columns: 58px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 3px 8px;
+    text-align: left;
+  }
+
+  .introBossPortrait {
+    grid-row: 1 / span 2;
+    width: 58px;
+    height: 58px;
+    aspect-ratio: auto;
+  }
+
+  .introBoss span,
+  .introBoss small {
+    white-space: normal;
   }
 
   .overlay h2 {

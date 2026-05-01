@@ -190,6 +190,49 @@ function createScoreTexture(key: string, text: string, combo: number): THREE.Can
   });
 }
 
+function createAvatarFrameTexture(key: string, color: string, secondaryColor: string): THREE.CanvasTexture {
+  return makeCanvasTexture(key, (ctx, size) => {
+    ctx.clearRect(0, 0, size, size);
+    const center = size / 2;
+    const glow = ctx.createRadialGradient(center, center, 36, center, center, 124);
+    glow.addColorStop(0, 'rgba(255,255,255,0.05)');
+    glow.addColorStop(0.54, color);
+    glow.addColorStop(0.72, secondaryColor);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.34;
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(center, center, 124, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(center, center, 108, Math.PI * 0.04, Math.PI * 1.42);
+    ctx.stroke();
+
+    ctx.strokeStyle = secondaryColor;
+    ctx.shadowColor = secondaryColor;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(center, center, 90, Math.PI * 1.12, Math.PI * 1.92);
+    ctx.stroke();
+
+    ctx.shadowBlur = 10;
+    for (let i = 0; i < 8; i += 1) {
+      const angle = i * Math.PI * 0.25;
+      const x = center + Math.cos(angle) * 108;
+      const y = center + Math.sin(angle) * 108;
+      ctx.fillStyle = i % 2 === 0 ? color : secondaryColor;
+      ctx.fillRect(x - 5, y - 5, 10, 10);
+    }
+  });
+}
+
 function textureForPath(
   loader: THREE.TextureLoader,
   cache: Map<string, THREE.Texture>,
@@ -220,6 +263,10 @@ function judgeAnimation(enemy: Enemy): CharacterAnimation {
   if (enemy.status === 'respawning') return 'respawn';
   if (enemy.health < enemy.maxHealth) return 'hurt';
   return 'chase';
+}
+
+function isAvatarJudgeSprite(enemy: Enemy, spritePath: string | undefined): boolean {
+  return Boolean(spritePath && enemy.judge.avatar && spritePath === enemy.judge.avatar);
 }
 
 function syncPool<T, K extends string | number>(
@@ -756,7 +803,9 @@ function createJudge(
   body.position.y = 0.33;
   body.castShadow = true;
   body.name = 'judge-body';
-  group.add(makeShadow(0.52));
+  const shadow = makeShadow(0.52);
+  shadow.name = 'judge-shadow';
+  group.add(shadow);
   group.add(body);
 
   const spritePath = selectJudgeSprite(enemy.judge, judgeAnimation(enemy));
@@ -777,7 +826,40 @@ function createJudge(
   sprite.name = 'judge-billboard';
   sprite.position.y = 1.22;
   sprite.scale.set(1.45, 1.45, 1);
+  sprite.renderOrder = 2;
+  const glitchSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    alphaTest: 0.03,
+    depthWrite: false,
+    color: colorFromCss(enemy.judge.secondaryColor),
+    opacity: 0.12,
+    blending: THREE.AdditiveBlending,
+  }));
+  glitchSprite.name = 'judge-glitch-billboard';
+  glitchSprite.position.y = 1.22;
+  glitchSprite.scale.set(1.5, 1.5, 1);
+  glitchSprite.renderOrder = 1;
+  group.add(glitchSprite);
   group.add(sprite);
+
+  const avatarFrame = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: textureFromCache(
+      textureCache,
+      `judge-avatar-frame-${enemy.judge.handle}`,
+      () => createAvatarFrameTexture(`judge-avatar-frame-${enemy.judge.handle}`, enemy.judge.color, enemy.judge.secondaryColor),
+    ),
+    transparent: true,
+    alphaTest: 0.02,
+    depthWrite: false,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+  }));
+  avatarFrame.name = 'judge-avatar-frame';
+  avatarFrame.position.y = 1.22;
+  avatarFrame.scale.set(1.68, 1.68, 1);
+  avatarFrame.renderOrder = 0;
+  group.add(avatarFrame);
 
   const aura = new THREE.Mesh(
     new THREE.RingGeometry(0.72, 0.82, 64),
@@ -815,7 +897,10 @@ function updateJudge(
 ): void {
   setObjectPosition(object, enemy, state, 0);
   const body = object.getObjectByName('judge-body') as THREE.Mesh;
+  const shadow = object.getObjectByName('judge-shadow') as THREE.Mesh;
   const sprite = object.getObjectByName('judge-billboard') as THREE.Sprite;
+  const glitchSprite = object.getObjectByName('judge-glitch-billboard') as THREE.Sprite;
+  const avatarFrame = object.getObjectByName('judge-avatar-frame') as THREE.Sprite;
   const aura = object.getObjectByName('judge-aura') as THREE.Mesh;
   const healthBack = object.getObjectByName('judge-health-back') as THREE.Mesh;
   const healthFill = object.getObjectByName('judge-health-fill') as THREE.Mesh;
@@ -835,16 +920,44 @@ function updateJudge(
         textureKey,
         () => createLabelTexture(textureKey, enemy.judge.signal, enemy.judge.handle, enemy.judge.color, enemy.judge.secondaryColor),
       );
+    glitchSprite.material.map = sprite.material.map;
     sprite.material.needsUpdate = true;
+    glitchSprite.material.needsUpdate = true;
     object.userData.textureKey = textureKey;
   }
 
   const defeated = enemy.status !== 'chasing';
+  const avatarSprite = isAvatarJudgeSprite(enemy, spritePath);
+  const pulse = Math.sin(state.elapsed * 3.25 + enemy.id);
+  const twitch = Math.sin(state.elapsed * 17 + enemy.id * 0.7);
+  const baseSpriteScale = avatarSprite
+    ? defeated ? 1.08 : 1.62 + threat * 0.32
+    : defeated ? 1.18 : 1.45 + threat * 0.28;
+  const lean = defeated ? 0 : Math.sin(state.elapsed * 2.15 + enemy.id) * 0.035 + threat * 0.045;
   object.visible = enemy.status === 'chasing' || enemy.status === 'defeated' || enemy.status === 'respawning';
+  shadow.scale.setScalar(avatarSprite ? 1.18 + threat * 0.18 : 1);
   body.rotation.y = state.elapsed * (defeated ? 0.6 : 1.5) + enemy.id;
+  body.visible = !avatarSprite;
   body.scale.setScalar(defeated ? 0.72 : 1 + threat * 0.16);
   sprite.material.opacity = defeated ? 0.42 : 0.95;
-  sprite.scale.setScalar(defeated ? 1.18 : 1.45 + threat * 0.28);
+  sprite.material.rotation = lean;
+  sprite.position.x = defeated ? 0 : Math.sin(state.elapsed * 4.1 + enemy.id) * 0.018;
+  sprite.position.y = avatarSprite
+    ? defeated ? 0.96 : 1.16 + pulse * 0.065 + threat * 0.08
+    : defeated ? 1.06 : 1.22 + pulse * 0.055 + threat * 0.06;
+  sprite.scale.setScalar(baseSpriteScale);
+  glitchSprite.visible = !defeated;
+  glitchSprite.position.x = sprite.position.x + twitch * (0.018 + threat * 0.03);
+  glitchSprite.position.y = sprite.position.y + Math.cos(state.elapsed * 13 + enemy.id) * 0.026;
+  glitchSprite.material.opacity = defeated ? 0 : 0.05 + threat * 0.2 + Math.max(0, pulse) * 0.05;
+  glitchSprite.material.rotation = lean + Math.sin(state.elapsed * 7.4 + enemy.id) * 0.08;
+  glitchSprite.scale.setScalar(baseSpriteScale * (1.03 + threat * 0.08));
+  avatarFrame.visible = avatarSprite && !defeated;
+  avatarFrame.position.x = sprite.position.x;
+  avatarFrame.position.y = sprite.position.y;
+  avatarFrame.material.rotation = -lean * 0.75 + state.elapsed * 0.08;
+  avatarFrame.material.opacity = 0.42 + threat * 0.22 + Math.max(0, pulse) * 0.08;
+  avatarFrame.scale.setScalar(baseSpriteScale * (1.18 + threat * 0.06));
   aura.visible = !defeated;
   aura.scale.setScalar(1 + threat * 1.2 + Math.sin(state.elapsed * 8 + enemy.id) * 0.08);
   (aura.material as THREE.MeshBasicMaterial).opacity = 0.16 + threat * 0.34;

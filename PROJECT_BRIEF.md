@@ -29,13 +29,9 @@ The humor should be affectionate and arcade-like, not mean-spirited. The judges 
 
 ## Hackathon Context
 
-Vibe Jam 2026 is an AI game-development competition where 90%+ of the code should be AI-written. The game must run on the web, be free to play, require no login, and load quickly. The deadline is May 1, 2026 at 13:37 UTC. The required Vibe Jam widget script must be included in the game HTML.
+Vibe Jam 2026 was an AI game-development competition where 90%+ of the code should be AI-written. The game must run on the web, be free to play, require no login, and load quickly. The deadline was May 1, 2026 at 13:37 UTC.
 
-Required widget:
-
-```html
-<script async src="https://vibej.am/2026/widget.js"></script>
-```
+Current production note: the game no longer loads contest tracking widgets or external portal handoff scripts.
 
 ## Desired Feel
 

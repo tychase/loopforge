@@ -37,7 +37,7 @@ The frontend should include:
 - agent lab panel
 - current research hypothesis
 - post-run summary
-- Vibe Jam widget
+- no contest tracking widget unless explicitly requested
 
 ## Backend
 

@@ -84,13 +84,21 @@ function BossPanel({ enemy }: { enemy: Enemy }) {
   const ratio = healthRatio(enemy);
   return (
     <div className="bossPanel" style={{ '--judge-color': enemy.judge.color } as CSSProperties}>
-      <div>
-        <strong>{enemy.judge.handle}</strong>
-        <span>{enemy.judge.bossTitle}</span>
-      </div>
-      <small>{learnedLabel(enemy)}</small>
-      <div className="bossHealth" aria-label={`${enemy.judge.handle} health`}>
-        <span style={{ width: `${ratio * 100}%` }} />
+      {enemy.judge.avatar && (
+        <div className="bossPortrait" aria-hidden="true">
+          <img src={enemy.judge.avatar} alt="" />
+          <span />
+        </div>
+      )}
+      <div className="bossPanelBody">
+        <div>
+          <strong>{enemy.judge.handle}</strong>
+          <span>{enemy.judge.bossTitle}</span>
+        </div>
+        <small>{learnedLabel(enemy)}</small>
+        <div className="bossHealth" aria-label={`${enemy.judge.handle} health`}>
+          <span style={{ width: `${ratio * 100}%` }} />
+        </div>
       </div>
     </div>
   );

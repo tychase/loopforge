@@ -15,6 +15,78 @@ Hetzner VPS:
 
 This is enough for the first serious multiplayer version if the game uses small rooms, compact state updates, and conservative tick rates.
 
+## Current VPS Setup
+
+Last configured: 2026-05-01.
+
+Host:
+
+- IP: `91.98.64.207`
+- Hostname: `arcade`
+- OS: Ubuntu 24.04.4 LTS
+- Node: `v22.22.2`
+- npm: `10.9.7`
+- Static app path: `/srv/judge-rush/app`
+- Static build path served by Caddy: `/srv/judge-rush/app/dist`
+- Deploy user: `judge-rush`
+- Public domain: `https://arena.tylerchase.org/`
+- Public HTTP behavior: `http://arena.tylerchase.org/` redirects to HTTPS
+- Production Vercel frontend remains: `https://judge-rush.vercel.app`
+
+Runtime state:
+
+- Caddy is installed, enabled, serving the built Vite `dist`, and managing HTTPS for `arena.tylerchase.org`.
+- PM2 is installed for the future backend, but no PM2 app is running yet.
+- UFW is active and allows only OpenSSH, HTTP, and HTTPS inbound.
+- Nginx and Docker are not installed.
+- The old Hermes runtime and stale `/root/loopforge` checkout were removed after backing them up to `/root/hermes-legacy-backup-20260501.tar.zst`.
+- The VPS does not keep an outbound GitHub SSH key. It clones the public repo over HTTPS.
+
+Current Caddy shape:
+
+```caddyfile
+{
+	admin off
+}
+
+arena.tylerchase.org {
+	root * /srv/judge-rush/app/dist
+	encode zstd gzip
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	try_files {path} /index.html
+	file_server
+}
+```
+
+Repeatable deploy command on the VPS:
+
+```bash
+/usr/local/bin/deploy-judge-rush
+```
+
+That script fast-forwards `/srv/judge-rush/app` from `origin/main`, runs:
+
+```bash
+npm ci
+npm test
+npm run build
+```
+
+and restarts Caddy. It does not run or expose `npm run dev`.
+
+DNS/HTTPS status:
+
+- `arena.tylerchase.org` has an A record pointing to `91.98.64.207`.
+- Caddy obtained a Let's Encrypt certificate for `arena.tylerchase.org`.
+- HTTP redirects to HTTPS.
+
 ## Target Architecture
 
 ```txt

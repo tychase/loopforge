@@ -38,11 +38,7 @@ npm test
 npm run build
 ```
 
-The Vibe Jam widget is included in `index.html`:
-
-```html
-<script async src="https://vibej.am/2026/widget.js"></script>
-```
+The production HTML does not load contest tracking widgets or external portal handoff scripts.
 
 ## Deployment direction
 

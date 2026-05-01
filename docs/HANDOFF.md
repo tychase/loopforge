@@ -31,7 +31,7 @@ Results:
 
 - `npm test`: 35 tests passed
 - `npm run build`: passed; Vite reports the expected large chunk warning after adding ThreeJS (`~190.8 kB` gzip JS)
-- Browser smoke: `http://127.0.0.1:5180` loaded, start button worked, player movement worked, ThreeJS canvas rendered, Vibe Jam widget remained visible, no Vite overlay, no console errors or warnings.
+- Browser smoke: `http://127.0.0.1:5180` loaded, start button worked, player movement worked, ThreeJS canvas rendered, no Vite overlay, no console errors or warnings.
 
 ## Important Worktree Note
 
@@ -98,14 +98,13 @@ Rendering:
 
 - The game now uses a staged ThreeJS camera-follow arena, not the older canvas-only renderer.
 - `src/ThreeCanvas.tsx` reads the existing `GameState` snapshot and renders the arena as a 3D floor plane/grid.
-- Player, shards, blasts, portals, and judges render as simple 3D objects and billboards.
+- Player, shards, blasts, and judges render as simple 3D objects and billboards.
 - The camera follows from an angled third-person/top-down perspective.
 - Lighting, emissive materials, additive glow meshes, and fake shadows provide the current 3D look without postprocessing or large assets.
 - `src/GameHud.tsx` keeps score, wave, clock, boss health, minimap, threat, and notice UI in React overlays.
 - `src/game.ts` remains the simulation source of truth.
 - Shard pickups now create shard-to-player trails, small burst particles, score popups, magnet preview tethers, and a combo/streak HUD readout.
-- The arena includes a ThreeJS-rendered `Vibe Jam Portal` exit portal.
-- Portal arrivals with `?portal=true` skip the start overlay, spawn the player into the arena, and create a nearby return portal when `ref` is present.
+- External portal arrivals and return handoffs have been removed from production.
 - The page chrome above and below the arena has been removed. Essential run stats now render as React overlays on top of the ThreeJS scene so the arena is the first meaningful viewport.
 
 Threat feedback:
@@ -122,8 +121,8 @@ The next feature patches should stay small and high-impact:
 
 1. Upgrade choice polish and stronger build identity.
 2. Judge personality pass: each judge gets one simple readable behavior.
-3. Arena visual pass: portals, lab boundary props, parallax particles, better floor lighting.
-4. Submission pass: fast load, widget, mobile-ish check, no console errors, clear first screen.
+3. Arena visual pass: lab boundary props, parallax particles, better floor lighting.
+4. Production pass: fast load, mobile-ish check, no console errors, clear first screen.
 
 Avoid for now:
 
@@ -148,11 +147,9 @@ Added:
 - combo/streak counter for fast pickups
 - focused test coverage for pickup feedback and combo expiry
 - more dramatic upgrade overlay with mutation tags, sigils, and next-wave language
-- exit portal collision for `https://vibej.am/portal/2026`
-- portal arrival support for `?portal=true`
-- return portal support when a `ref` query parameter exists
+- contest widget and external portal handoff support were removed after the missed submission deadline
 - arena-first ThreeJS scene with React score/wave/clock/blast/combo HUD
-- focused test coverage for exit/return portal triggers
+- focused test coverage that the game starts without hackathon portal handoff surfaces
 
 ## Next Recommended Patch
 
@@ -161,29 +158,20 @@ Do a compact arena visual pass next.
 Scope:
 
 - animated boundary lights
-- portal staging polish
+- arena staging polish
 - corner lab machinery silhouettes
 - subtle parallax lab particles
 - keep gameplay collision unchanged
 
 Reason:
 
-The core reward, upgrade, and portal loops now exist. The fastest route to "impressive" is making the arena feel more staged and intentional without adding systems risk.
+The core reward and upgrade loops now exist. The fastest route to "impressive" is making the arena feel more staged and intentional without adding systems risk.
 
-## Submission Requirements Status
+## Production Status
 
-- Required widget snippet is present in `index.html`:
-
-```html
-<script async src="https://vibej.am/2026/widget.js"></script>
-```
-
-- Exit portal is implemented in the arena and redirects to `https://vibej.am/portal/2026`.
-- Exit portal sends continuity params including `username`, `color`, `speed`, and `ref`.
-- `ref` is built from the current game origin/path so final deployment should use one canonical domain.
-- Receiving `?portal=true` starts the game immediately with no start overlay.
-- Receiving `?portal=true&ref=...` adds a nearby return portal that redirects back to the previous game while preserving continuity params.
-- Remaining submission responsibility: deploy to one stable domain and use that single domain as the submitted URL.
+- Contest tracking widget loading has been removed from `index.html`.
+- External portal redirects and portal handoff query handling have been removed.
+- Remaining deployment responsibility: keep one stable public production URL.
 
 ## Fresh Chat Prompt
 
@@ -202,5 +190,5 @@ npm run dev -- --host 0.0.0.0 --host 127.0.0.1 --port 5180
 Suggested next steps for the next chat:
 
 1. Tighten the ThreeJS camera framing so the player stays comfortably inside the first viewport while moving in all directions.
-2. Add lightweight ThreeJS arena staging: animated rail lights, better portal glow, corner machinery silhouettes, and subtle lab particles.
-3. Run a submission pass: mobile-ish viewport smoke, portal handoff smoke, widget visibility, console errors, bundle size note, and final deploy readiness.
+2. Add lightweight ThreeJS arena staging: animated rail lights, corner machinery silhouettes, and subtle lab particles.
+3. Run a production pass: mobile-ish viewport smoke, no contest tracking widget, console errors, bundle size note, and final deploy readiness.

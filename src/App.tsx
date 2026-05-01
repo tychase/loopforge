@@ -9,7 +9,6 @@ import {
   applyUpgradeAndStartNextWave,
   chooseUpgradeOptions,
   createInitialState,
-  consumePortalTrigger,
   distance,
   fireShardBlast,
   isNavigationKey,
@@ -19,7 +18,6 @@ import {
   type CombatNotice,
   type Enemy,
   type GamePortal,
-  type GamePortalKind,
   type GameState,
   type JudgeExperience,
   type Shard,
@@ -74,65 +72,11 @@ type UpgradeVars = CSSProperties & {
   '--upgrade-color': string;
 };
 
-type PortalQueryContext = {
-  isPortalArrival: boolean;
-  returnRef?: string;
-  params: URLSearchParams;
-};
-
 function inputVector(): Vec {
   return {
     x: (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0),
     y: (keys.has('arrowdown') || keys.has('s') ? 1 : 0) - (keys.has('arrowup') || keys.has('w') ? 1 : 0),
   };
-}
-
-function readPortalQueryContext(): PortalQueryContext {
-  if (typeof window === 'undefined') {
-    return { isPortalArrival: false, params: new URLSearchParams() };
-  }
-  const params = new URLSearchParams(window.location.search);
-  return {
-    isPortalArrival: params.get('portal') === 'true',
-    returnRef: params.get('ref') ?? undefined,
-    params,
-  };
-}
-
-function currentGameRef(): string {
-  if (typeof window === 'undefined') return '';
-  return `${window.location.origin}${window.location.pathname}`;
-}
-
-function normalizePortalTarget(target: string): string {
-  if (/^https?:\/\//i.test(target)) return target;
-  return `https://${target}`;
-}
-
-function appendPortalParams(base: string, params: URLSearchParams): string {
-  const url = new URL(normalizePortalTarget(base), typeof window !== 'undefined' ? window.location.href : undefined);
-  params.forEach((value, key) => {
-    url.searchParams.set(key, value);
-  });
-  return url.toString();
-}
-
-function buildPortalParams(context: PortalQueryContext, state: GameState, includePortalFlag: boolean): URLSearchParams {
-  const params = new URLSearchParams(context.params);
-  params.delete('portal');
-  if (!params.has('username')) params.set('username', 'LoopForger');
-  if (!params.has('color')) params.set('color', 'cyan');
-  params.set('speed', Math.max(1, state.player.speed / 50).toFixed(1));
-  params.set('ref', currentGameRef());
-  if (includePortalFlag) params.set('portal', 'true');
-  return params;
-}
-
-function buildPortalRedirect(kind: GamePortalKind, context: PortalQueryContext, state: GameState): string {
-  if (kind === 'return' && context.returnRef) {
-    return appendPortalParams(context.returnRef, buildPortalParams(context, state, true));
-  }
-  return appendPortalParams('https://vibej.am/portal/2026', buildPortalParams(context, state, false));
 }
 
 function cloneExperience(experience: JudgeExperience): JudgeExperience {
@@ -1581,16 +1525,8 @@ function draw(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 export default function App() {
-  const portalContext = useMemo(() => readPortalQueryContext(), []);
-  const initialState = useMemo(
-    () => createInitialState(DEFAULT_VARIANT, {
-      portalArrival: portalContext.isPortalArrival,
-      returnPortal: portalContext.isPortalArrival && Boolean(portalContext.returnRef),
-    }),
-    [portalContext],
-  );
+  const initialState = useMemo(() => createInitialState(DEFAULT_VARIANT), []);
   const stateRef = useRef<GameState>(initialState);
-  const portalRedirectedRef = useRef(false);
   const [snapshot, setSnapshot] = useState<GameState>(() => snapshotState(stateRef.current));
   const upgrades = useMemo(() => chooseUpgradeOptions(snapshot, DEFAULT_VARIANT), [snapshot.status, snapshot.wave]);
 
@@ -1624,12 +1560,6 @@ export default function App() {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
       tickGame(state, inputVector(), dt);
-      const portalTrigger = consumePortalTrigger(state);
-      if (portalTrigger && !portalRedirectedRef.current) {
-        portalRedirectedRef.current = true;
-        window.location.assign(buildPortalRedirect(portalTrigger, portalContext, state));
-        return;
-      }
       setSnapshot(snapshotState(state));
       frame = requestAnimationFrame(loop);
     };
@@ -1639,11 +1569,7 @@ export default function App() {
 
   const restart = () => {
     keys.clear();
-    stateRef.current = createInitialState(DEFAULT_VARIANT, {
-      portalArrival: portalContext.isPortalArrival,
-      returnPortal: portalContext.isPortalArrival && Boolean(portalContext.returnRef),
-    });
-    portalRedirectedRef.current = false;
+    stateRef.current = createInitialState(DEFAULT_VARIANT);
     syncSnapshot();
   };
 
@@ -1693,7 +1619,10 @@ export default function App() {
               <div className="bossIntroGrid" aria-label="Vibe Jam judge bosses">
                 {JUDGE_CHASERS.map((judge) => (
                   <div key={judge.handle} className="introBoss" style={{ '--judge-color': judge.color, '--judge-alt': judge.secondaryColor } as JudgeVars}>
-                    <strong>{judge.signal}</strong>
+                    <div className="introBossPortrait" aria-hidden="true">
+                      {judge.avatar && <img src={judge.avatar} alt="" />}
+                      <strong>{judge.signal}</strong>
+                    </div>
                     <span>{judge.handle}</span>
                     <small>{judge.bossTitle}</small>
                   </div>

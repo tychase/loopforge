@@ -25,7 +25,7 @@ Already in place:
 
 - staged ThreeJS camera-follow arena renderer
 - 3D neon floor plane/grid with angled third-person camera follow
-- simple 3D/billboard player, shards, portals, blasts, and judge bosses
+- simple 3D/billboard player, shards, blasts, and judge bosses
 - shard collection
 - shard collection trails, score popups, burst particles, magnet preview tethers, and combo/streak feedback
 - shard blast combat
@@ -34,7 +34,7 @@ Already in place:
 - wave timer
 - upgrade choice
 - polished upgrade mutation overlay with tags, sigils, and next-wave language
-- Vibe Jam exit portal and portal-arrival return portal support
+- contest widget and external portal support removed from production
 - arena-first layout with React HUD overlays above the ThreeJS scene
 - threat warning rings, lunge aura, edge arrows, and danger pulse
 - tests/build passing
@@ -149,19 +149,18 @@ Added:
 - upgrade sigils and tags
 - next-wave effect language
 
-### Patch 2B: Vibe Jam Portal Support
+### Patch 2B: Portal Support
 
 Purpose: satisfy optional webring continuity while preserving instant play.
 
-Status: implemented.
+Status: removed from production after the submission deadline was missed.
 
-Added:
+Removed:
 
-- required widget is present in `index.html`
-- exit portal redirects to `https://vibej.am/portal/2026`
-- portal handoff params are preserved and forwarded
-- `?portal=true` starts the game immediately
-- `?portal=true&ref=...` adds a return portal near the spawn point
+- contest widget loading from `index.html`
+- external portal redirects
+- portal handoff query handling
+- return portal spawning from `ref` query parameters
 
 ### Patch 3: Judge Personality Pass
 

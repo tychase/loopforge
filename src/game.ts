@@ -170,9 +170,7 @@ export type GameState = {
   scorePopups: ScorePopup[];
   pickupCombo: PickupCombo;
   portals: GamePortal[];
-  portalCooldown: number;
   portalSafetyActive: boolean;
-  pendingPortal?: GamePortalKind;
   screenShake: number;
   hitFlash: number;
   nextId: number;
@@ -190,11 +188,6 @@ export const DEFAULT_VARIANT: GameVariant = {
   seed: 1337,
 };
 
-export type InitialStateOptions = {
-  portalArrival?: boolean;
-  returnPortal?: boolean;
-};
-
 const BLAST_COOLDOWN = 0.42;
 const BLAST_SPEED = 720;
 const BLAST_DAMAGE = 34;
@@ -202,12 +195,10 @@ const BLAST_MAX_AGE = 0.9;
 const JUDGE_RESPAWN_SECONDS = 2.4;
 const START_GRACE_SECONDS = 4;
 const WAVE_GRACE_SECONDS = 2.2;
-const PORTAL_ARRIVAL_GRACE_SECONDS = 10;
 const PICKUP_COMBO_SECONDS = 1.15;
 const PICKUP_TRAIL_SECONDS = 0.46;
 const PICKUP_PARTICLE_SECONDS = 0.62;
 const SCORE_POPUP_SECONDS = 0.9;
-const PORTAL_COOLDOWN_SECONDS = 1.1;
 const ENTRY_CORRIDOR_MARGIN = 84;
 const ENTRY_CORRIDOR_WIDTH = 380;
 const ENTRY_CORRIDOR_HEIGHT = 430;
@@ -359,33 +350,8 @@ function createExperience(): JudgeExperience {
   };
 }
 
-function createPortals(variant: GameVariant, includeReturnPortal: boolean): GamePortal[] {
-  const safeZone = getPortalSafetyZone(variant);
-  const portals: GamePortal[] = [
-    {
-      id: 'vibe-jam-exit',
-      kind: 'exit',
-      label: 'Vibe Jam Portal',
-      x: variant.arena.width - 230,
-      y: variant.arena.height - 230,
-      radius: 48,
-      color: '#ff4dca',
-      secondaryColor: '#7df9ff',
-    },
-  ];
-  if (includeReturnPortal) {
-    portals.unshift({
-      id: 'vibe-jam-return',
-      kind: 'return',
-      label: 'Return Portal',
-      x: safeZone.x + 118,
-      y: safeZone.y + safeZone.height / 2,
-      radius: 46,
-      color: '#ffcf5c',
-      secondaryColor: '#9cff8f',
-    });
-  }
-  return portals;
+function createPortals(): GamePortal[] {
+  return [];
 }
 
 function pushCombatNotice(
@@ -481,14 +447,13 @@ function recordShardPickup(state: GameState, shard: Shard): void {
   state.screenShake = Math.max(state.screenShake, combo >= 4 ? 2.4 : 1.1);
 }
 
-export function createInitialState(variant: GameVariant = DEFAULT_VARIANT, options: InitialStateOptions = {}): GameState {
-  const portals = createPortals(variant, options.returnPortal === true);
-  const returnPortal = portals.find((portal) => portal.kind === 'return');
+export function createInitialState(variant: GameVariant = DEFAULT_VARIANT): GameState {
+  const portals = createPortals();
   const state: GameState = {
     variant,
     player: {
-      x: returnPortal ? returnPortal.x + 104 : variant.arena.width / 2,
-      y: returnPortal ? returnPortal.y : variant.arena.height / 2,
+      x: variant.arena.width / 2,
+      y: variant.arena.height / 2,
       radius: 18,
       speed: 255,
       turnSpeed: 3.15,
@@ -504,34 +469,21 @@ export function createInitialState(variant: GameVariant = DEFAULT_VARIANT, optio
     wave: 1,
     elapsed: 0,
     waveTimeRemaining: variant.waveSeconds,
-    graceRemaining: options.portalArrival ? PORTAL_ARRIVAL_GRACE_SECONDS : START_GRACE_SECONDS,
-    status: options.portalArrival ? 'playing' : 'ready',
-    message: options.portalArrival
-      ? 'Portal handoff received. The arena is live and the return portal is behind you.'
-      : 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and aim shard blasts with the cursor.',
+    graceRemaining: START_GRACE_SECONDS,
+    status: 'ready',
+    message: 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and aim shard blasts with the cursor.',
     notices: [],
     pickupTrails: [],
     pickupParticles: [],
     scorePopups: [],
     pickupCombo: { count: 0, best: 0, timer: 0, pulse: 0 },
     portals,
-    portalCooldown: options.portalArrival ? PORTAL_COOLDOWN_SECONDS : 0,
-    portalSafetyActive: options.portalArrival === true,
+    portalSafetyActive: false,
     screenShake: 0,
     hitFlash: 0,
     nextId: 1,
   };
   refillWave(state);
-  if (options.portalArrival) {
-    pushCombatNotice(state, {
-      kind: 'wave',
-      title: 'Portal arrival',
-      detail: options.returnPortal ? 'Return portal armed. The judges are staged.' : 'The judges are staged.',
-      color: '#ffcf5c',
-      ttl: 2.6,
-      intensity: 0.65,
-    });
-  }
   return state;
 }
 
@@ -847,34 +799,6 @@ export function checkCollisions(state: GameState): void {
   }
 }
 
-export function checkPortalCollisions(state: GameState): void {
-  if (state.status !== 'playing' || state.portalCooldown > 0 || state.pendingPortal) return;
-  const portal = state.portals.find((candidate) => distance(state.player, candidate) <= state.player.radius + candidate.radius);
-  if (!portal) return;
-
-  state.pendingPortal = portal.kind;
-  state.portalCooldown = PORTAL_COOLDOWN_SECONDS;
-  state.screenShake = Math.max(state.screenShake, 8);
-  state.hitFlash = Math.max(state.hitFlash, 0.38);
-  state.message = portal.kind === 'return'
-    ? 'Return portal opened. Sending the player back through the Vibe Jam chain.'
-    : 'Vibe Jam Portal opened. Sending the run to the next 2026 game.';
-  pushCombatNotice(state, {
-    kind: 'wave',
-    title: portal.kind === 'return' ? 'Return portal' : 'Vibe Jam Portal',
-    detail: portal.kind === 'return' ? 'Continuity handoff back to the previous game.' : 'Continuity handoff to the 2026 portal.',
-    color: portal.color,
-    ttl: 1.8,
-    intensity: 0.9,
-  });
-}
-
-export function consumePortalTrigger(state: GameState): GamePortalKind | undefined {
-  const portal = state.pendingPortal;
-  state.pendingPortal = undefined;
-  return portal;
-}
-
 function normalizeAngle(angle: number): number {
   while (angle < -Math.PI) angle += Math.PI * 2;
   while (angle > Math.PI) angle -= Math.PI * 2;
@@ -884,7 +808,6 @@ function normalizeAngle(angle: number): number {
 export function tickGame(state: GameState, input: Vec, dt: number): void {
   advanceCombatFeedback(state, dt);
   advancePickupFeedback(state, dt);
-  state.portalCooldown = Math.max(0, state.portalCooldown - dt);
   if (state.status !== 'playing') return;
   state.elapsed += dt;
   state.player.blastCooldown = Math.max(0, state.player.blastCooldown - dt);
@@ -900,7 +823,6 @@ export function tickGame(state: GameState, input: Vec, dt: number): void {
   clampPlayerToArena(state);
   collectShard(state);
   updateShardBlasts(state, dt);
-  checkPortalCollisions(state);
 
   if (state.graceRemaining > 0) {
     const previousGrace = state.graceRemaining;

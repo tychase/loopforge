@@ -134,4 +134,4 @@ This project currently uses React plus HTML canvas, not Phaser. If the project l
 - attack: frames 8-11
 - death: frames 12-15
 
-Keep gameplay web-accessible with no login and no heavy loading screens. The Vibe Jam widget is loaded from `index.html`.
+Keep gameplay web-accessible with no login and no heavy loading screens. The production HTML should not load contest tracking widgets.

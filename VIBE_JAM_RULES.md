@@ -12,13 +12,7 @@ This document is a working project summary. Always verify against the official V
 - Game should not require login or signup.
 - Game should load quickly.
 - Game should be created during the jam period.
-- Include the required Vibe Jam widget script.
-
-Required script:
-
-```html
-<script async src="https://vibej.am/2026/widget.js"></script>
-```
+- The required contest widget was removed from production after the submission deadline was missed.
 
 ## Submission Priorities
 
@@ -31,7 +25,7 @@ The game should:
 - have no account requirement
 - work in the browser
 - communicate the AI-built nature clearly
-- include the widget
+- avoid contest tracking widgets in production
 
 ## Project-Specific Interpretation
 
@@ -51,7 +45,7 @@ Before submitting:
 - test game URL in incognito
 - confirm no login needed
 - confirm fast load
-- confirm widget appears
+- confirm no contest tracking widget loads
 - confirm game starts quickly
 - confirm mobile/desktop basics if possible
 - confirm no broken console errors

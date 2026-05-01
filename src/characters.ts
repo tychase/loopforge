@@ -13,12 +13,23 @@ export type JudgeChaser = {
   bossTitle: string;
   prop: string;
   bark: string;
+  avatar?: string;
   sprites?: CharacterSprites;
 };
 
 export function selectJudgeSprite(judge: JudgeChaser, animation: CharacterAnimation): string | undefined {
   if (!judge.sprites) return undefined;
   return judge.sprites[animation] ?? judge.sprites.idle;
+}
+
+function avatarSprites(avatar: string): CharacterSprites {
+  return {
+    idle: avatar,
+    chase: avatar,
+    hurt: avatar,
+    defeated: avatar,
+    respawn: avatar,
+  };
 }
 
 export const JUDGE_CHASERS: JudgeChaser[] = [
@@ -33,13 +44,8 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     bossTitle: 'Instant-Ship Warden',
     prop: 'launch timer halo',
     bark: 'No loading screens. Instant fun or instant doom!',
-    sprites: {
-      idle: '/assets/judges/levelsio/boss.png',
-      chase: '/assets/judges/levelsio/boss.png',
-      hurt: '/assets/judges/levelsio/boss.png',
-      defeated: '/assets/judges/levelsio/boss.png',
-      respawn: '/assets/judges/levelsio/boss.png',
-    },
+    avatar: '/assets/judges/levelsio/avatar.png',
+    sprites: avatarSprites('/assets/judges/levelsio/avatar.png'),
   },
   {
     handle: '@S13K_',
@@ -52,6 +58,8 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     bossTitle: 'Verdict Blade',
     prop: 'scorecard saber',
     bark: 'ship it, but make the loop tighter!',
+    avatar: '/assets/judges/s13k/avatar.png',
+    sprites: avatarSprites('/assets/judges/s13k/avatar.png'),
   },
   {
     handle: '@TIMSORET',
@@ -64,6 +72,8 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     bossTitle: 'Juice Auditor',
     prop: 'feel meter gauntlet',
     bark: 'Your juice budget is under review!',
+    avatar: '/assets/judges/timsoret/avatar.png',
+    sprites: avatarSprites('/assets/judges/timsoret/avatar.png'),
   },
   {
     handle: '@NICOLAMANZINI',
@@ -76,6 +86,8 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     bossTitle: 'Art Detector',
     prop: 'placeholder scanner',
     bark: 'I can smell placeholder art from here!',
+    avatar: '/assets/judges/nicola/avatar.png',
+    sprites: avatarSprites('/assets/judges/nicola/avatar.png'),
   },
   {
     handle: '@EDWINARBUS',
@@ -88,5 +100,7 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     bossTitle: 'Vibe Containment',
     prop: 'voltage crown',
     bark: 'The vibes are escaping. Contain them!',
+    avatar: '/assets/judges/edwin/avatar.png',
+    sprites: avatarSprites('/assets/judges/edwin/avatar.png'),
   },
 ];

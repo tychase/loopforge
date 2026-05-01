@@ -17,7 +17,7 @@ Priorities:
 - Keep the game web-based.
 - No login.
 - No heavy loading.
-- Include the Vibe Jam widget.
+- Do not add contest tracking widgets unless explicitly requested.
 - Use simple assets where possible.
 - Prefer procedural shapes, particles, gradients, and text over large asset files.
 - Keep the core loop stable.

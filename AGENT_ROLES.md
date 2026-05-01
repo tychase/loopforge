@@ -131,7 +131,7 @@ Responsibilities:
 - Keep the code simple.
 - Avoid overengineering.
 - Preserve fast load time.
-- Add the Vibe Jam widget.
+- Do not add contest tracking widgets unless explicitly requested.
 - Keep the game web-accessible.
 
 Outputs:

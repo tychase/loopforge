@@ -5,10 +5,8 @@ import {
   aimPlayerAtCursor,
   applyUpgradeAndStartNextWave,
   checkCollisions,
-  checkPortalCollisions,
   clampPlayerToArena,
   collectShard,
-  consumePortalTrigger,
   createInitialState,
   chooseUpgradeOptions,
   distance,
@@ -16,7 +14,6 @@ import {
   getPortalSafetyZone,
   isNavigationKey,
   isInsidePortalEnemyExclusionZone,
-  isInsidePortalSafetyZone,
   nearestChasingEnemy,
   respawnDefeatedJudges,
   spawnEnemyForWave,
@@ -138,96 +135,10 @@ describe('LoopForge game logic', () => {
     expect(state.shards.every((shard) => shard.value === 5)).toBe(true);
   });
 
-  it('triggers the Vibe Jam exit portal when the player enters it', () => {
+  it('starts without hackathon portal handoff surfaces', () => {
     const state = createInitialState(DEFAULT_VARIANT);
-    startGame(state);
-    const portal = state.portals.find((candidate) => candidate.kind === 'exit');
-    expect(portal).toBeDefined();
-    state.player.x = portal!.x;
-    state.player.y = portal!.y;
 
-    checkPortalCollisions(state);
-
-    expect(consumePortalTrigger(state)).toBe('exit');
-    expect(consumePortalTrigger(state)).toBeUndefined();
-    expect(state.message).toContain('Vibe Jam Portal');
-  });
-
-  it('starts portal arrivals in play with a nearby return portal', () => {
-    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
-    const portal = state.portals.find((candidate) => candidate.kind === 'return');
-    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
-
-    expect(state.status).toBe('playing');
-    expect(portal).toBeDefined();
-    expect(isInsidePortalSafetyZone(DEFAULT_VARIANT, portal!)).toBe(true);
-    expect(state.player.x).toBeGreaterThan(safeZone.x);
-    expect(state.player.x).toBeLessThan(safeZone.door.x);
-    expect(distance(state.player, portal!)).toBeGreaterThan(state.player.radius + portal!.radius);
-
-    state.portalCooldown = 0;
-    state.player.x = portal!.x;
-    state.player.y = portal!.y;
-    checkPortalCollisions(state);
-
-    expect(consumePortalTrigger(state)).toBe('return');
-  });
-
-  it('protects portal arrivals from judge collisions inside the entry corridor', () => {
-    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
-    const judge = state.enemies[0];
-    state.graceRemaining = 0;
-    judge.x = state.player.x;
-    judge.y = state.player.y;
-
-    tickGame(state, { x: 0, y: 0 }, 0.1);
-
-    expect(state.status).toBe('playing');
-    expect(isInsidePortalSafetyZone(DEFAULT_VARIANT, state.player)).toBe(true);
-  });
-
-  it('keeps judges out of the protected portal corridor', () => {
-    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
-    const judge = state.enemies[0];
-    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
-    state.graceRemaining = 0;
-    judge.x = safeZone.door.x + 12;
-    judge.y = state.player.y;
-
-    tickGame(state, { x: 0, y: 0 }, 0.25);
-
-    expect(isInsidePortalSafetyZone(DEFAULT_VARIANT, judge, judge.radius)).toBe(false);
-    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, judge, judge.radius)).toBe(false);
-    expect(judge.x).toBeGreaterThan(safeZone.egress.x + safeZone.egress.width);
-  });
-
-  it('keeps the portal launch lane protected after the one-way door', () => {
-    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
-    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
-    const judge = state.enemies[0];
-    state.graceRemaining = 0;
-    state.player.x = safeZone.egress.x + safeZone.egress.width / 2;
-    state.player.y = safeZone.egress.y + safeZone.egress.height / 2;
-    judge.x = state.player.x;
-    judge.y = state.player.y;
-
-    tickGame(state, { x: 0, y: 0 }, 0.1);
-
-    expect(state.status).toBe('playing');
-    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, state.player)).toBe(true);
-    expect(state.portalSafetyActive).toBe(true);
-  });
-
-  it('turns off portal safety after the player exits the launch lane', () => {
-    const state = createInitialState(DEFAULT_VARIANT, { portalArrival: true, returnPortal: true });
-    const safeZone = getPortalSafetyZone(DEFAULT_VARIANT);
-    state.enemies = [];
-    state.player.x = safeZone.egress.x + safeZone.egress.width - 8;
-    state.player.y = safeZone.egress.y + safeZone.egress.height / 2;
-
-    tickGame(state, { x: 1, y: 0 }, 0.2);
-
-    expect(isInsidePortalEnemyExclusionZone(DEFAULT_VARIANT, state.player)).toBe(false);
+    expect(state.portals).toEqual([]);
     expect(state.portalSafetyActive).toBe(false);
   });
 
@@ -278,18 +189,33 @@ describe('LoopForge game logic', () => {
 
   it('keeps judge characters asset-ready for future sprite billboards', () => {
     const expectedStates: CharacterAnimation[] = ['idle', 'chase', 'attack', 'hurt', 'defeated', 'respawn'];
+    const expectedAvatars = [
+      '/assets/judges/levelsio/avatar.png',
+      '/assets/judges/s13k/avatar.png',
+      '/assets/judges/timsoret/avatar.png',
+      '/assets/judges/nicola/avatar.png',
+      '/assets/judges/edwin/avatar.png',
+    ];
 
     expect(expectedStates).toContain('chase');
-    expect(JUDGE_CHASERS.every((judge) => 'sprites' in judge || judge.sprites === undefined)).toBe(true);
-    expect(JUDGE_CHASERS[0].sprites?.chase).toBe('/assets/judges/levelsio/boss.png');
+    expect(JUDGE_CHASERS.map((judge) => judge.avatar)).toEqual(expectedAvatars);
+    JUDGE_CHASERS.forEach((judge) => {
+      expect(judge.sprites?.idle).toBe(judge.avatar);
+      expect(judge.sprites?.chase).toBe(judge.avatar);
+      expect(judge.sprites?.hurt).toBe(judge.avatar);
+      expect(judge.sprites?.defeated).toBe(judge.avatar);
+      expect(judge.sprites?.respawn).toBe(judge.avatar);
+    });
   });
 
   it('selects the best available judge sprite and falls back when no image exists', () => {
     const judge = { ...JUDGE_CHASERS[0], sprites: { idle: '/idle.png', chase: '/chase.png' } };
+    const spriteLessJudge = { ...JUDGE_CHASERS[1], sprites: undefined };
 
     expect(selectJudgeSprite(judge, 'chase')).toBe('/chase.png');
     expect(selectJudgeSprite(judge, 'hurt')).toBe('/idle.png');
-    expect(selectJudgeSprite(JUDGE_CHASERS[1], 'chase')).toBeUndefined();
+    expect(selectJudgeSprite(JUDGE_CHASERS[1], 'chase')).toBe(JUDGE_CHASERS[1].avatar);
+    expect(selectJudgeSprite(spriteLessJudge, 'chase')).toBeUndefined();
   });
 
   it('moves with cursor keys across arena space without stealing mouse aim', () => {

@@ -1,6 +1,6 @@
 LoopForge is a playable AI game-design lab for Vibe Jam 2026.
 
-The goal is a fast-loading browser game where the player feels like they are inside an AI-run arcade lab. The frontend must be instantly playable, free, no login, and include the Vibe Jam widget script.
+The goal is a fast-loading browser game where the player feels like they are inside an AI-run arcade lab. The frontend must be instantly playable, free, and require no login.
 
 Core game direction:
 - lightweight ThreeJS Vibe Jam arena
@@ -40,5 +40,5 @@ Allowed later, after the single-player loop is fun:
 - asynchronous public arena scoring
 - real-time multiplayer/open arena as the target, with local/bot fallback required and no dependency on network success
 
-Required widget:
-<script async src="https://vibej.am/2026/widget.js"></script>
+Current production note:
+Do not load contest tracking widgets or external portal handoff scripts.
