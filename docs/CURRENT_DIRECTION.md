@@ -1,0 +1,200 @@
+# LoopForge Current Direction
+
+Last updated: 2026-05-01
+
+## Goal
+
+Build LoopForge into a professional-feeling Vibe Jam arcade game that looks impressive quickly, is understandable in seconds, and uses the contest judge references as the memorable hook.
+
+The intended standard is not "largest mechanics list." The intended standard is:
+
+- instantly playable
+- visually polished
+- funny judge references
+- clear danger and reward feedback
+- fast restart loop
+- no login
+- no heavy load
+- no confusing systems
+
+## Current Position
+
+LoopForge has crossed from rough prototype into a playable vertical slice foundation.
+
+Already in place:
+
+- 2.5D camera-follow arena
+- angled projection grid
+- screen-Y depth sorting
+- billboard player/judges
+- shard collection
+- shard blast combat
+- judge health/defeat/respawn
+- local per-match judge learning
+- wave timer
+- upgrade choice
+- threat warning rings, lunge aura, edge arrows, and danger pulse
+- tests/build passing
+
+This means the next work should not chase big new systems. The next work should make every existing interaction feel better.
+
+## Design Philosophy
+
+Mechanics, theory, and psychology should be good enough to support flow, replay, and clarity.
+
+The bulk of effort should now move toward presentation:
+
+- satisfying feedback
+- readable silhouettes
+- strong judge identity
+- polished arena staging
+- short-run drama
+- memorable Vibe Jam theming
+
+Use game design and psychology as guardrails, not as an excuse to build deep systems.
+
+The player should feel:
+
+- "I know what to do."
+- "That pickup felt good."
+- "That judge is getting close."
+- "I barely escaped."
+- "This upgrade changes my next run."
+- "The judge references are funny and specific."
+
+## North Star Experience
+
+In the first 60 seconds:
+
+1. The player sees a polished lab arena and judge bosses.
+2. The player starts immediately.
+3. Shards pull attention with glow, trails, and pickup reward.
+4. Judges enter as physical threats with obvious warnings.
+5. The player fires a readable shard blast.
+6. The wave ends quickly enough to see an upgrade.
+7. The player wants to retry or continue.
+
+## Visual Direction
+
+Keep the current lightweight 2.5D canvas path for the jam build.
+
+The game should feel like:
+
+- neon AI lab arena
+- arcade boss rush
+- readable mascot billboards
+- energetic particle feedback
+- playful contest parody
+- professional web game polish
+
+Do not move to Three.js unless the 2.5D canvas ceiling becomes the real blocker. Right now, polish per hour is much higher in canvas.
+
+## Judge Reference Direction
+
+The judge references should become the game identity.
+
+Each judge should have:
+
+- recognizable handle in UI
+- strong color
+- readable silhouette
+- one prop or visual motif
+- one simple behavior difference
+- one bark/personality angle
+- one defeat/respawn gag
+
+Keep it affectionate and arcade-like. The goal is "fun boss character," not realistic likeness.
+
+Suggested simple behaviors:
+
+- `@levelsio`: fastest direct rusher, pressures instant action.
+- `@S13K_`: dash/lunge telegraph, strong danger rings.
+- `@TIMSORET`: game-feel auditor, leaves temporary hazard pulses.
+- `@NICOLAMANZINI`: polish detector, guards or steals high-value shards.
+- `@EDWINARBUS`: vibe containment, grows stronger if ignored too long.
+
+Implement only one behavior at a time and keep each behavior visually obvious.
+
+## Near-Term Roadmap
+
+### Patch 1: Shard Collection Juice
+
+Purpose: make the reward loop satisfying every few seconds.
+
+Add:
+
+- pickup trails
+- burst particles
+- score popups
+- magnet pull visual
+- combo/streak counter for fast pickups
+
+### Patch 2: Upgrade Moment Polish
+
+Purpose: make wave completion feel like a mutation moment.
+
+Add:
+
+- more dramatic upgrade overlay
+- clear build language
+- upgrade icons or visual marks
+- upgrades that visibly change the next wave
+
+### Patch 3: Judge Personality Pass
+
+Purpose: make judge references memorable.
+
+Add one simple behavior per judge, with visible telegraphs.
+
+### Patch 4: Arena Visual Pass
+
+Purpose: make the game look more professional without a full engine rewrite.
+
+Add:
+
+- judge spawn portals
+- animated boundary lights
+- parallax lab particles
+- arena corner structures
+- better floor highlight zones
+
+### Patch 5: Submission Polish
+
+Purpose: remove friction and make the game judge-ready.
+
+Check:
+
+- first screen clarity
+- widget visible and not blocking
+- no console errors
+- fast load
+- responsive laptop/mobile-ish layout
+- build output small enough
+- incognito smoke test
+
+## What Not To Do Yet
+
+Avoid:
+
+- real multiplayer
+- server leaderboard
+- account systems
+- deep progression trees
+- complex inventory
+- multiple rooms
+- pathfinding
+- large 3D engine rewrite
+- procedural content systems
+
+These can come later only if the core arcade experience already feels good.
+
+## Reference Order For Future Chats
+
+Read these first:
+
+1. `docs/HANDOFF.md`
+2. `docs/CURRENT_DIRECTION.md`
+3. `docs/art-direction.md`
+4. `PROJECT_BRIEF.md`
+
+Use `docs/plans/2026-04-30-arena-characters-combat-roadmap.md` as historical context, not the primary current plan.

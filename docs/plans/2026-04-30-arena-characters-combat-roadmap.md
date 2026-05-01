@@ -2,6 +2,23 @@
 
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task when execution begins.
 
+## 2026-05-01 Status Note
+
+This document is now historical planning context. The current primary docs are:
+
+- `docs/HANDOFF.md`
+- `docs/CURRENT_DIRECTION.md`
+- `docs/art-direction.md`
+
+Major progress since this roadmap was written:
+
+- The game moved from pseudo-FPV toward a 2.5D camera-follow arena.
+- Judge config, shard-blast combat, health, defeat, respawn, local learning, upgrade choices, and threat feedback are implemented.
+- Render helpers now live under `src/game/render/`.
+- The current strategic direction is to keep mechanics good enough for flow and spend most near-term effort on professional visuals, juice, arena polish, and judge references.
+
+Use the phase list below only as background, not as the active task order.
+
 **Goal:** Evolve LoopForge from a pseudo-FPV shard survival prototype into a funny open Vibe Jam arena with silly arcade mascot sprite billboards, shard-blast combat, local per-match judge learning, and eventual real-time multiplayer/open-arena systems with local/bot fallback.
 
 **Architecture:** Keep the shipped game lightweight and instant-loading. Build mechanics locally first in typed TypeScript modules, then add assets as small sprite billboards, then add server features only after the single-player/bot loop is fun. Judge learning should be deterministic, bounded, and local per-match first; global learning can come later.

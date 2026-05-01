@@ -1,247 +1,162 @@
-# LoopForge handoff / minimal context reload
+# LoopForge Handoff
 
-Last updated: 2026-04-30
+Last updated: 2026-05-01
 
-## One-sentence project state
+## One-Sentence State
 
-LoopForge is a Node 18-compatible Vite 5 + React 18 + TypeScript browser game prototype: a lightweight pseudo-FPV Vibe Jam arcade arena where the player collects vibe/code shards, uses mouse-look + keyboard/cursor movement, fires shard blasts, defeats silly judge chasers, and judges locally learn small per-match behaviors when they respawn.
+LoopForge is now a playable Vite 5 + React 18 + TypeScript browser arcade arena: move through a 2.5D projected lab floor, collect shards, avoid judge chasers, fire shard blasts, survive waves, pick upgrades, and watch judges take damage, respawn, and adapt locally within the match.
 
-## Where the project lives
+## Current Workspace
 
-- Repo: `/root/loopforge`
-- Dev server currently observed on: `http://91.98.64.207:5174/`
-- Local port: `5174`
-- Current process observed: `node` listening on `0.0.0.0:5174`
+- Repo on this machine: `D:\hermes-arcade\loopforge`
+- Dev server currently verified on: `http://127.0.0.1:5173`
+- Main app: `src/App.tsx`
+- Simulation: `src/game.ts`
+- Judge config: `src/characters.ts`
+- Render helpers: `src/game/render/`
+- Tests: `src/game.test.ts`, `src/game/monsterAssets.test.ts`, `src/game/render/projection.test.ts`
 
-## Important environment note
+## Verification Status
 
-The "newer version of something" we were worried about was Node.js.
-
-- Current runtime checked: Node `v18.19.1`, npm `9.2.0`
-- The latest Vite/Vitest line wanted Node 20+ and failed here.
-- To keep momentum, the app was pinned/scaffolded with Node 18-compatible versions:
-  - Vite `^5.4.21`
-  - Vitest `^1.6.1`
-  - React `^18.3.1`
-  - TypeScript `^5.7.3`
-- If we later upgrade to current Vite/Vitest, install/use Node 20 or 22 first. Until then, do not casually run broad dependency upgrades that pull in Node 20-only packages.
-
-## Verification status
-
-Last verified with:
+Last verified:
 
 ```bash
-cd /root/loopforge
 npm test
 npm run build
 ```
 
 Results:
 
-- `npm test`: 15 tests passed
+- `npm test`: 32 tests passed
 - `npm run build`: passed
-- Browser smoke: `http://127.0.0.1:5174/` loaded with no console errors after clicking canvas; visual check showed HUD/canvas intact.
+- Browser smoke: `http://127.0.0.1:5173` loaded, start button worked, player movement worked, canvas click fired a shard blast, no Vite overlay, no runtime errors.
 
-## Current git/worktree state
+## Important Worktree Note
 
-There are uncommitted changes. Do not assume the repo is clean.
+The repo has ongoing uncommitted work. Do not assume a clean tree, and do not revert unrelated changes.
 
-Modified files observed:
+Known active areas include:
 
-- `GAME_DESIGN_PRINCIPLES.md`
-- `HERMES_GAME_LAB_ARCHITECTURE.md`
-- `PROJECT_BRIEF.md`
-- `PROJECT_CONTEXT.md`
-- `README.md`
 - `src/App.tsx`
-- `src/characters.ts`
-- `src/game.test.ts`
 - `src/game.ts`
-- `src/styles.css`
-
-Untracked directory:
-
+- `src/game.test.ts`
+- `src/characters.ts`
+- `src/game/render/`
+- `public/assets/`
 - `docs/`
 
-This handoff file is also in `docs/HANDOFF.md`.
+## Product Strategy
 
-## Core direction / product constraints
+The target is not a deep systems game. The target is a professional-feeling, instantly playable, visually impressive web arcade game with strong Vibe Jam judge references.
 
-North star:
+Mechanics should be "just good enough" to support replay, clarity, and flow:
 
-- Lightweight pseudo-FPV/open Vibe Jam arena.
-- Player collects AI-code/vibe shards.
-- Silly character versions of Vibe Jam judges chase the player.
-- First combat mechanic: shard blasts.
-- Judges have health, can be defeated, respawn, and locally learn small behaviors per match.
-- Visual style should be silly arcade mascot sprite billboards.
-- Humor should be affectionate parody, not mean-spirited.
-- Future target: real-time multiplayer/open arena, but local/bot fallback is mandatory.
+- clear movement
+- clear collection
+- clear danger
+- satisfying shard blast
+- short waves
+- meaningful but simple upgrades
+- judges that are readable and funny
 
-Hard MVP rules:
+Once those are stable, most effort should go into:
 
-- Fun before impressive.
-- Instant-loading browser game.
-- No mandatory account/login.
-- Avoid heavy assets and complex inventory.
-- Avoid autonomous rewrite/deploy loops for MVP.
-- Vibe Jam widget script belongs in the frontend:
+- stronger 2.5D arena presentation
+- judge character identity
+- sprite/billboard polish
+- particles and screen feedback
+- readable UI/hud polish
+- first-60-seconds pacing
+- submission reliability
 
-```html
-<script async src="https://vibej.am/2026/widget.js"></script>
-```
+## Implemented Gameplay
 
-## Current gameplay implemented
+Core loop:
 
-Implemented in `src/game.ts`, rendered in `src/App.tsx`, styled in `src/styles.css`, tested in `src/game.test.ts`.
-
-Player/game loop:
-
-- Pseudo-FPV canvas view.
-- Player moves around an arena collecting shards.
-- Waves, timer, score, upgrades, chasers.
-- Arrow keys/WASD movement relative to the current view (forward/back/strafe).
-- Mouse-look controls the player view after clicking the canvas for pointer lock.
-- Q/E provide a keyboard-look fallback.
+- Ready screen starts the run.
+- Player moves with WASD/arrow keys.
+- Player collects shards for score.
+- Shard pickups use the player's collision radius and magnet radius.
 - Space/click fires shard blasts.
+- Blasts auto-lock toward the nearest active judge.
+- Waves end by timer or shard clear.
+- Upgrade choice starts the next wave.
 
-Judges/chasers:
+Judges:
 
-- Judge definitions live in `src/characters.ts` as `JUDGE_CHASERS`.
-- Each enemy has:
-  - `health`
-  - `maxHealth`
-  - `status`: `chasing | defeated | respawning`
-  - `respawnTimer`
-  - `aliveTime`
-  - `lastDamageDistance`
-  - `experience`
-- Judges chase the player while active.
-- Defeated judges stop chasing, dim visually, then respawn.
+- Judge definitions live in `src/characters.ts`.
+- Active judges chase the player after the grace window.
+- Judges have health, max health, status, respawn timers, and local match experience.
+- Defeated judges stop chasing, award score, then respawn.
+- Respawned judges can learn bounded local behavior changes.
 
-Shard blasts:
+Rendering:
 
-- `fireShardBlast(state)` creates projectile blasts from the player heading.
-- Blast constants in `src/game.ts`:
-  - cooldown: `0.42`
-  - speed: `720`
-  - damage: `34`
-  - max age: `0.9`
-- Collision uses movement segment overlap, so fast blasts should not tunnel through judges.
+- The game now uses a 2.5D camera-follow arena, not the older pseudo-FPV tunnel direction.
+- `src/game/render/camera.ts` computes the camera-follow world view.
+- `src/game/render/projection.ts` maps 2D world coordinates into angled screen coordinates.
+- The arena draws a compressed perspective-style grid and projected boundary lines.
+- Entities use Y-based scale, elliptical shadows, and screen-Y render sorting.
+- Judge and player presentation is billboard-style.
+- UI remains separate from transformed world rendering.
 
-Judge defeat/scoring:
+Threat feedback:
 
-- Damaging a judge gives a small score increment.
-- Defeating a judge gives a larger score increment.
-- Defeat stores last defeat details for local learning.
-- Defeat starts respawn timer and updates message.
+- Nearest judge targeting line.
+- Player proximity warning rings after grace.
+- Judge threat aura and lunge pulse when close.
+- Offscreen edge arrows for judges outside the camera view.
+- Screen-edge pulse when danger is high.
 
-Local per-match judge learning:
+## Strategic Priority
 
-- `JudgeExperience` tracks:
-  - `level`
-  - `experience`
-  - `defeats`
-  - behavior weights: `chase`, `guardShards`, `zigZag`, `retreatWhenHurt`
-  - `lastDefeat`
-- On respawn, a defeated judge learns one bounded behavior adjustment.
-- Current simple rules include:
-  - defeated from far away -> learns more zig-zag
-  - survived a long time -> learns aggression/chase
-  - otherwise learns basic survival/retreat
-- This is intentionally local to the current match. No global persistence yet.
+Make the game look and feel professional before adding complex mechanics.
 
-Judge/character definitions:
+The next feature patches should stay small and high-impact:
 
-- Judge definitions now live in `src/characters.ts`.
-- `src/characters.ts` exports:
-  - `CharacterAnimation`: `idle | chase | attack | hurt | defeated | respawn`
-  - `CharacterSprites`: optional sprite path map keyed by animation
-  - `JudgeChaser`
-  - `JUDGE_CHASERS`
-- `src/game.ts` re-exports character types/data for compatibility and uses `JUDGE_CHASERS` to spawn enemies.
+1. Shard collection juice and combo feedback.
+2. Upgrade choice polish and stronger build identity.
+3. Judge personality pass: each judge gets one simple readable behavior.
+4. Arena visual pass: portals, lab boundary props, parallax particles, better floor lighting.
+5. Submission pass: fast load, widget, mobile-ish check, no console errors, clear first screen.
 
-Rendering/UI:
+Avoid for now:
 
-- Canvas pseudo-FPV sky/floor grid.
-- Responsive layout keeps the arena visible on smaller laptop-height screens; extra panels compact/hide on short viewports.
-- Shards render as glowing diamonds.
-- Blasts render visually in FPV and minimap.
-- Judges render as optional sprite billboards when `JudgeChaser.sprites` image paths are available and loaded.
-- Missing/unloaded/broken sprite images gracefully fall back to the neon card renderer with health bars.
-- Defeated judges are dimmed.
-- HUD shows score, wave, clock, active judges, blast readiness/cooldown, message.
-- Minimap shows player, shards, judges, blasts.
+- full Three.js rewrite
+- real multiplayer
+- inventory systems
+- rooms/buildings/pathfinding
+- account/login systems
+- complex procedural generation
+- heavy assets that slow first load
 
-## Existing plan document
+## Next Recommended Patch
 
-Roadmap/art docs exist at:
+Do the shard collection juice pass next.
 
-- `/root/loopforge/docs/plans/2026-04-30-arena-characters-combat-roadmap.md`
-- `/root/loopforge/docs/art-direction.md`
+Scope:
 
-Notable roadmap state:
+- pickup trails from shard to player
+- score popups
+- small burst particles
+- stronger magnet visual when a shard is within pickup range
+- combo/streak counter for fast pickups
+- tests only for any new state transitions, not for every visual particle
 
-- Phase 1: core feel/readability.
-- Phase 2: move judge definitions into `src/characters.ts`, add sprite billboard support, create art direction doc.
-- Phase 3: combat. Judge health/player attack/combat scoring are partly/mostly implemented already.
-- Phase 4: local judge learning is partly/mostly implemented already.
-- Phase 5: leaderboard/open arena/multiplayer later.
+Reason:
 
-## Recommended next implementation steps
+The player needs a satisfying reward beat every few seconds. This is the fastest path from "prototype" to "one more run."
 
-Best next code tasks, in order:
+## Fresh Chat Prompt
 
-1. Tune game feel now that the mouse-look/combat loop is playable.
-   - Movement speed and mouse sensitivity.
-   - Blast damage/cooldown.
-   - Judge health and respawn time.
-   - Score balance between shards, damage, defeats, survival.
-
-2. Add clearer threat/proximity feedback.
-   - Nearest judge helper/test.
-   - On-screen danger warning.
-   - Better audio/visual-like cues using CSS/canvas only.
-
-3. Only after the single-player loop feels fun: optional leaderboard/open arena design.
-
-## Commands to use after clearing context
-
-```bash
-cd /root/loopforge
-node --version
-npm --version
-npm test
-npm run build
-git status --short
-```
-
-If dev server is not running:
-
-```bash
-cd /root/loopforge
-npm run dev -- --host 0.0.0.0 --port 5174
-```
-
-If it is already running and hot-reloading, do not start another server on the same port.
-
-## Suggested prompt after clearing context
-
-Paste this into the fresh session:
+Use this in the next chat:
 
 ```text
-We are working on LoopForge at /root/loopforge. Please read /root/loopforge/docs/HANDOFF.md and continue from there. First run git status, node --version, npm --version, npm test, and npm run build. Then proceed with the next recommended frontend task unless I specify otherwise.
+We are working on LoopForge at D:\hermes-arcade\loopforge. Please read docs/HANDOFF.md and docs/CURRENT_DIRECTION.md first. Then run git status --short, npm test, and npm run build. Continue with the next recommended patch unless I specify otherwise.
 ```
 
-## Context-management recommendation
+If the dev server is not already running:
 
-Best practical approach:
-
-1. Keep compact durable project handoff docs in the repo, like this file.
-2. Use `/compress` if you want to continue the same session but shrink the chat context.
-3. Use `/new` or `/clear` when the context is messy or nearly full, then point the new session at this handoff file.
-4. Keep stable facts in Hermes memory only if they are durable and broadly useful.
-5. Keep procedures/workflows in Hermes skills, not memory.
-6. Keep task-specific state in repo docs, not hidden chat context.
-
-For this project, a repo handoff doc plus a fresh session is usually better than relying on automatic compression alone, because the next agent can verify the actual filesystem and tests instead of trusting a lossy chat summary.
+```bash
+npm run dev -- --host 0.0.0.0 --host 127.0.0.1 --port 5173
+```

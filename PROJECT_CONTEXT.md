@@ -3,13 +3,18 @@ LoopForge is a playable AI game-design lab for Vibe Jam 2026.
 The goal is a fast-loading browser game where the player feels like they are inside an AI-run arcade lab. The frontend must be instantly playable, free, no login, and include the Vibe Jam widget script.
 
 Core game direction:
-- lightweight first-person / pseudo-3D Vibe Jam arena
+- lightweight 2.5D Vibe Jam arena
 - collect AI-code/vibe shards
 - avoid, then eventually fight, silly judge chasers with shard blasts
 - survive short waves and earn score from collection, close calls, and judge defeats
 - judges have health, die/reset, and eventually retain tiny local per-match learned experience between lives before any global learning exists
 - receive mutations/upgrades
 - Hermes/agent lab generates JSON configs, not huge code rewrites
+
+Current strategy:
+- keep mechanics just deep enough for clarity, flow, and replay
+- put most near-term effort into professional-feeling visuals, juice, arena polish, and judge references
+- avoid complex systems until the existing loop feels excellent
 
 Agent roles:
 - Creative Director: focus, cuts, submission quality

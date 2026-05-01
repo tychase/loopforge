@@ -3,7 +3,7 @@ export { JUDGE_CHASERS } from './characters';
 export type { CharacterAnimation, CharacterSprites, JudgeChaser } from './characters';
 
 export type Vec = { x: number; y: number };
-export type Status = 'playing' | 'upgrade' | 'gameover';
+export type Status = 'ready' | 'playing' | 'upgrade' | 'gameover';
 export type EnemyStatus = 'chasing' | 'defeated' | 'respawning';
 
 export type JudgeExperience = {
@@ -57,6 +57,18 @@ export type Enemy = Vec & {
   lastDamageDistance: number;
   experience: JudgeExperience;
 };
+export type CombatNoticeKind = 'hit' | 'defeat' | 'respawn' | 'wave' | 'shield';
+export type CombatNotice = {
+  id: number;
+  kind: CombatNoticeKind;
+  title: string;
+  detail: string;
+  color: string;
+  judgeHandle?: string;
+  age: number;
+  ttl: number;
+  intensity: number;
+};
 export type Upgrade = {
   id: string;
   title: string;
@@ -86,15 +98,19 @@ export type GameState = {
   wave: number;
   elapsed: number;
   waveTimeRemaining: number;
+  graceRemaining: number;
   status: Status;
   message: string;
+  notices: CombatNotice[];
+  screenShake: number;
+  hitFlash: number;
   nextId: number;
 };
 
 export const DEFAULT_VARIANT: GameVariant = {
-  id: 'judge-rush-fpv',
-  name: 'Judge Rush FPV',
-  hypothesis: 'A tiny FPV panic maze with real Vibe Jam judges as comic chasers is more memorable than a plain top-down loop.',
+  id: 'judge-rush-arena',
+  name: 'Judge Rush Arena',
+  hypothesis: 'A readable camera-follow arena where Vibe Jam judge monsters chase, learn, and respawn is stronger than a fixed-position survival shooter.',
   arena: { width: 1280, height: 1280 },
   waveSeconds: 28,
   shardsPerWave: 10,
@@ -108,6 +124,8 @@ const BLAST_SPEED = 720;
 const BLAST_DAMAGE = 34;
 const BLAST_MAX_AGE = 0.9;
 const JUDGE_RESPAWN_SECONDS = 2.4;
+const START_GRACE_SECONDS = 4;
+const WAVE_GRACE_SECONDS = 2.2;
 
 const UPGRADES: Upgrade[] = [
   { id: 'swift-boots', title: 'Vibe Sneakers', description: '+12% sprint speed', apply: (state) => { state.player.speed *= 1.12; } },
@@ -141,6 +159,21 @@ function createExperience(): JudgeExperience {
   };
 }
 
+function pushCombatNotice(
+  state: GameState,
+  notice: Omit<CombatNotice, 'id' | 'age'>,
+): void {
+  state.notices = [{ ...notice, id: state.nextId++, age: 0 }, ...state.notices].slice(0, 5);
+}
+
+function advanceCombatFeedback(state: GameState, dt: number): void {
+  state.screenShake = Math.max(0, state.screenShake - dt * 18);
+  state.hitFlash = Math.max(0, state.hitFlash - dt * 2.8);
+  state.notices = state.notices
+    .map((notice) => ({ ...notice, age: notice.age + dt }))
+    .filter((notice) => notice.age < notice.ttl);
+}
+
 export function createInitialState(variant: GameVariant = DEFAULT_VARIANT): GameState {
   const state: GameState = {
     variant,
@@ -162,8 +195,12 @@ export function createInitialState(variant: GameVariant = DEFAULT_VARIANT): Game
     wave: 1,
     elapsed: 0,
     waveTimeRemaining: variant.waveSeconds,
-    status: 'playing',
-    message: 'Collect vibe shards. Space/click fires shard blasts. Judges learn when they respawn.',
+    graceRemaining: START_GRACE_SECONDS,
+    status: 'ready',
+    message: 'The Vibe Jam panel is staged. Walk the arena, bank code shards, kite the judge monsters, and blast the nearest active boss.',
+    notices: [],
+    screenShake: 0,
+    hitFlash: 0,
     nextId: 1,
   };
   refillWave(state);
@@ -185,6 +222,26 @@ export function refillWave(state: GameState): void {
   });
   state.blasts = [];
   state.waveTimeRemaining = state.variant.waveSeconds;
+}
+
+export function startGame(state: GameState): boolean {
+  if (state.status !== 'ready') return false;
+  state.status = 'playing';
+  state.graceRemaining = START_GRACE_SECONDS;
+  const openingTarget = nearestChasingEnemy(state);
+  if (openingTarget) {
+    state.player.heading = Math.atan2(openingTarget.y - state.player.y, openingTarget.x - state.player.x);
+  }
+  state.message = 'Safe window live. The judges unlock when the grace ring expires.';
+  pushCombatNotice(state, {
+    kind: 'wave',
+    title: `Wave ${state.wave}: judges staged`,
+    detail: `${state.enemies.length} Vibe Jam bosses are entering the arena.`,
+    color: '#7df9ff',
+    ttl: 2.6,
+    intensity: 0.55,
+  });
+  return true;
 }
 
 export function clampPlayerToArena(state: GameState): void {
@@ -236,14 +293,26 @@ export function spawnEnemyForWave(variant: GameVariant, wave: number, index: num
   };
 }
 
-const MOUSE_LOOK_SENSITIVITY = 0.0042;
+const MOUSE_LOOK_SENSITIVITY = 0.00135;
 
 export function turnPlayerView(state: GameState, movementX: number): void {
-  state.player.heading = normalizeAngle(state.player.heading + movementX * MOUSE_LOOK_SENSITIVITY);
+  state.player.heading = normalizeAngle(state.player.heading + movementX * MOUSE_LOOK_SENSITIVITY * state.player.turnSpeed);
+}
+
+export function nearestChasingEnemy(state: GameState): Enemy | undefined {
+  return state.enemies.reduce<Enemy | undefined>((best, enemy) => {
+    if (enemy.status !== 'chasing') return best;
+    if (!best || distance(state.player, enemy) < distance(state.player, best)) return enemy;
+    return best;
+  }, undefined);
 }
 
 export function fireShardBlast(state: GameState): boolean {
   if (state.status !== 'playing' || state.player.blastCooldown > 0) return false;
+  const target = nearestChasingEnemy(state);
+  if (target) {
+    state.player.heading = Math.atan2(target.y - state.player.y, target.x - state.player.x);
+  }
   const vx = Math.cos(state.player.heading) * BLAST_SPEED;
   const vy = Math.sin(state.player.heading) * BLAST_SPEED;
   state.blasts.push({
@@ -258,7 +327,8 @@ export function fireShardBlast(state: GameState): boolean {
     maxAge: BLAST_MAX_AGE,
   });
   state.player.blastCooldown = BLAST_COOLDOWN;
-  state.message = 'Shard blast fired. Give the scorecards something to dodge.';
+  state.message = target ? `Shard blast auto-locked on ${target.judge.handle}.` : 'Shard blast fired.';
+  state.screenShake = Math.max(state.screenShake, 1.8);
   return true;
 }
 
@@ -319,8 +389,30 @@ export function damageJudge(state: GameState, enemy: Enemy, amount: number, sour
     enemy.experience.lastDefeat = { damageSource: source, distance: enemy.lastDamageDistance, timeAliveSeconds: enemy.aliveTime };
     state.score += 25 + enemy.experience.level * 5;
     state.message = `${enemy.judge.handle} defeated by shard blast. The judge is taking notes...`;
+    state.screenShake = Math.max(state.screenShake, 15);
+    state.hitFlash = Math.max(state.hitFlash, 0.76);
+    pushCombatNotice(state, {
+      kind: 'defeat',
+      title: `${enemy.judge.handle} down`,
+      detail: `${enemy.judge.bossTitle} is rebuilding a smarter verdict.`,
+      color: enemy.judge.color,
+      judgeHandle: enemy.judge.handle,
+      ttl: 2.2,
+      intensity: 1,
+    });
   } else {
     state.message = `${enemy.judge.handle} took a shard blast. ${enemy.health}/${enemy.maxHealth} HP.`;
+    state.screenShake = Math.max(state.screenShake, 5.5);
+    state.hitFlash = Math.max(state.hitFlash, 0.34);
+    pushCombatNotice(state, {
+      kind: 'hit',
+      title: 'Direct hit',
+      detail: `${enemy.judge.handle} HP ${enemy.health}/${enemy.maxHealth}`,
+      color: enemy.judge.color,
+      judgeHandle: enemy.judge.handle,
+      ttl: 0.86,
+      intensity: 0.45,
+    });
   }
 }
 
@@ -362,6 +454,17 @@ export function respawnDefeatedJudges(state: GameState, dt: number): void {
       enemy.aliveTime = 0;
       enemy.respawnTimer = 0;
       state.message = `${enemy.judge.handle} respawned and learned ${learned}.`;
+      state.screenShake = Math.max(state.screenShake, 11);
+      state.hitFlash = Math.max(state.hitFlash, 0.44);
+      pushCombatNotice(state, {
+        kind: 'respawn',
+        title: `${enemy.judge.handle} learned ${learned}`,
+        detail: `${enemy.judge.bossTitle} returns at level ${enemy.experience.level}.`,
+        color: enemy.judge.color,
+        judgeHandle: enemy.judge.handle,
+        ttl: 3,
+        intensity: 0.95,
+      });
     }
   }
 }
@@ -375,8 +478,20 @@ export function checkCollisions(state: GameState): void {
         enemy.x = 32;
         enemy.y = 32;
         state.message = `${enemy.judge.handle} got PR-spun into the corner. Shield spent.`;
+        state.screenShake = Math.max(state.screenShake, 9);
+        pushCombatNotice(state, {
+          kind: 'shield',
+          title: 'Shield burned',
+          detail: `${enemy.judge.handle} was thrown back to the corner.`,
+          color: '#9cff8f',
+          judgeHandle: enemy.judge.handle,
+          ttl: 1.8,
+          intensity: 0.7,
+        });
       } else {
         state.status = 'gameover';
+        state.screenShake = Math.max(state.screenShake, 18);
+        state.hitFlash = Math.max(state.hitFlash, 0.82);
         state.message = `${enemy.judge.handle} caught your prototype and yelled “${enemy.judge.bark}” Final score: ${state.score}.`;
       }
       return;
@@ -391,24 +506,40 @@ function normalizeAngle(angle: number): number {
 }
 
 export function tickGame(state: GameState, input: Vec, dt: number): void {
+  advanceCombatFeedback(state, dt);
   if (state.status !== 'playing') return;
   state.elapsed += dt;
-  state.waveTimeRemaining -= dt;
   state.player.blastCooldown = Math.max(0, state.player.blastCooldown - dt);
 
-  const forward = -input.y;
-  const strafe = input.x;
-  const moveLength = Math.hypot(forward, strafe) || 1;
-  const forwardX = Math.cos(state.player.heading);
-  const forwardY = Math.sin(state.player.heading);
-  const rightX = -Math.sin(state.player.heading);
-  const rightY = Math.cos(state.player.heading);
-  state.player.x += ((forwardX * forward + rightX * strafe) / moveLength) * state.player.speed * dt;
-  state.player.y += ((forwardY * forward + rightY * strafe) / moveLength) * state.player.speed * dt;
+  const moveLength = Math.hypot(input.x, input.y);
+  if (moveLength > 0) {
+    state.player.x += (input.x / moveLength) * state.player.speed * dt;
+    state.player.y += (input.y / moveLength) * state.player.speed * dt;
+    state.player.heading = Math.atan2(input.y, input.x);
+  }
 
   clampPlayerToArena(state);
   collectShard(state);
   updateShardBlasts(state, dt);
+
+  if (state.graceRemaining > 0) {
+    const previousGrace = state.graceRemaining;
+    state.graceRemaining = Math.max(0, state.graceRemaining - dt);
+    if (previousGrace > 0 && state.graceRemaining === 0) {
+      state.message = `Wave ${state.wave} is live. The judges are hunting.`;
+      pushCombatNotice(state, {
+        kind: 'wave',
+        title: `Wave ${state.wave} live`,
+        detail: 'The panel is hunting the prototype.',
+        color: '#ffcf5c',
+        ttl: 1.8,
+        intensity: 0.6,
+      });
+    }
+    return;
+  }
+
+  state.waveTimeRemaining -= dt;
   moveEnemiesTowardPlayer(state, dt);
   respawnDefeatedJudges(state, dt);
   checkCollisions(state);
@@ -429,9 +560,18 @@ export function chooseUpgradeOptions(state: GameState, variant: GameVariant): Up
 }
 
 export function applyUpgradeAndStartNextWave(state: GameState, upgrade: Upgrade): void {
-  upgrade.apply(state);
   state.wave += 1;
   state.status = 'playing';
-  state.message = `${upgrade.title} installed. Survive wave ${state.wave}.`;
   refillWave(state);
+  upgrade.apply(state);
+  state.graceRemaining = WAVE_GRACE_SECONDS;
+  state.message = `${upgrade.title} installed. Reposition before wave ${state.wave} goes live.`;
+  pushCombatNotice(state, {
+    kind: 'wave',
+    title: `${upgrade.title} installed`,
+    detail: `Wave ${state.wave} safe window is open.`,
+    color: '#9cff8f',
+    ttl: 2.3,
+    intensity: 0.65,
+  });
 }

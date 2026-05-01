@@ -2,17 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { JUDGE_CHASERS, selectJudgeSprite, type CharacterAnimation } from './characters';
 import {
   DEFAULT_VARIANT,
+  applyUpgradeAndStartNextWave,
   clampPlayerToArena,
   collectShard,
   createInitialState,
   chooseUpgradeOptions,
+  distance,
   fireShardBlast,
   isNavigationKey,
+  nearestChasingEnemy,
   respawnDefeatedJudges,
   spawnEnemyForWave,
+  startGame,
   tickGame,
   turnPlayerView,
   type GameState,
+  type Upgrade,
 } from './game';
 
 describe('LoopForge game logic', () => {
@@ -23,7 +28,8 @@ describe('LoopForge game logic', () => {
     expect(state.player.y).toBe(DEFAULT_VARIANT.arena.height / 2);
     expect(state.score).toBe(0);
     expect(state.wave).toBe(1);
-    expect(state.status).toBe('playing');
+    expect(state.status).toBe('ready');
+    expect(state.graceRemaining).toBeGreaterThan(0);
     expect(state.shards.length).toBeGreaterThan(0);
   });
 
@@ -69,6 +75,29 @@ describe('LoopForge game logic', () => {
     expect(new Set(options.map((option) => option.id)).size).toBe(3);
   });
 
+  it('applies upgrades after the next wave refills', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const upgrade: Upgrade = {
+      id: 'test-next-wave-boost',
+      title: 'Test Boost',
+      description: 'Boost next wave shards and clock',
+      apply: (current) => {
+        current.shards.forEach((shard) => {
+          shard.value += 4;
+        });
+        current.waveTimeRemaining += 4;
+      },
+    };
+
+    applyUpgradeAndStartNextWave(state, upgrade);
+
+    expect(state.wave).toBe(2);
+    expect(state.status).toBe('playing');
+    expect(state.graceRemaining).toBeGreaterThan(0);
+    expect(state.waveTimeRemaining).toBe(DEFAULT_VARIANT.waveSeconds + 4);
+    expect(state.shards.every((shard) => shard.value === 5)).toBe(true);
+  });
+
   it('uses the real Vibe Jam jury as named judge chasers', () => {
     const state = createInitialState(DEFAULT_VARIANT);
 
@@ -88,6 +117,7 @@ describe('LoopForge game logic', () => {
 
     expect(expectedStates).toContain('chase');
     expect(JUDGE_CHASERS.every((judge) => 'sprites' in judge || judge.sprites === undefined)).toBe(true);
+    expect(JUDGE_CHASERS[0].sprites?.chase).toBe('/assets/judges/levelsio/boss.png');
   });
 
   it('selects the best available judge sprite and falls back when no image exists', () => {
@@ -98,17 +128,84 @@ describe('LoopForge game logic', () => {
     expect(selectJudgeSprite(JUDGE_CHASERS[1], 'chase')).toBeUndefined();
   });
 
-  it('moves with cursor keys relative to the current view without turning the camera', () => {
+  it('moves with cursor keys across arena map space', () => {
     const state = createInitialState(DEFAULT_VARIANT);
+    startGame(state);
+    state.graceRemaining = 0;
     const startX = state.player.x;
     const startY = state.player.y;
-    const startHeading = state.player.heading;
 
     tickGame(state, { x: 1, y: -1 }, 0.25);
 
-    expect(state.player.heading).toBe(startHeading);
     expect(state.player.x).toBeGreaterThan(startX);
-    expect(state.player.y).toBeGreaterThan(startY);
+    expect(state.player.y).toBeLessThan(startY);
+    expect(state.player.heading).toBeCloseTo(-Math.PI / 4, 5);
+  });
+
+  it('waits in the ready state until the player starts the run', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const startClock = state.waveTimeRemaining;
+    const enemyX = state.enemies[0].x;
+
+    tickGame(state, { x: 0, y: -1 }, 1);
+
+    expect(state.status).toBe('ready');
+    expect(state.waveTimeRemaining).toBe(startClock);
+    expect(state.enemies[0].x).toBe(enemyX);
+  });
+
+  it('finds the nearest active judge for arena auto-targeting', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    state.enemies[0].x = state.player.x + 400;
+    state.enemies[0].y = state.player.y;
+    state.enemies[1].x = state.player.x + 80;
+    state.enemies[1].y = state.player.y;
+    state.enemies[2].x = state.player.x + 30;
+    state.enemies[2].y = state.player.y;
+    state.enemies[2].status = 'defeated';
+
+    expect(nearestChasingEnemy(state)?.id).toBe(state.enemies[1].id);
+  });
+
+  it('starts with a grace window before judges can catch the player', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const judge = state.enemies[0];
+    startGame(state);
+    judge.x = state.player.x;
+    judge.y = state.player.y;
+
+    tickGame(state, { x: 0, y: 0 }, 0.4);
+
+    expect(state.status).toBe('playing');
+    expect(state.graceRemaining).toBeGreaterThan(0);
+  });
+
+  it('lets judges chase once the grace window is over', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const judge = state.enemies[0];
+    startGame(state);
+    state.graceRemaining = 0;
+    judge.x = state.player.x + 220;
+    judge.y = state.player.y;
+    const startDistance = distance(state.player, judge);
+
+    tickGame(state, { x: 0, y: 0 }, 0.5);
+
+    expect(distance(state.player, judge)).toBeLessThan(startDistance);
+  });
+
+  it('ends the run when an unshielded judge collides after grace', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    const judge = state.enemies[0];
+    startGame(state);
+    state.graceRemaining = 0;
+    judge.x = state.player.x;
+    judge.y = state.player.y;
+
+    tickGame(state, { x: 0, y: 0 }, 0.1);
+
+    expect(state.status).toBe('gameover');
+    expect(state.message).toContain(judge.judge.handle);
   });
 
   it('turns the player view from mouse movement deltas', () => {
@@ -118,6 +215,27 @@ describe('LoopForge game logic', () => {
     turnPlayerView(state, 40);
 
     expect(state.player.heading).toBeGreaterThan(startHeading);
+  });
+
+  it('scales mouse-look sensitivity from the player turn speed', () => {
+    const slow = createInitialState(DEFAULT_VARIANT);
+    const fast = createInitialState(DEFAULT_VARIANT);
+    slow.player.turnSpeed = 1;
+    fast.player.turnSpeed = 2.5;
+
+    turnPlayerView(slow, 50);
+    turnPlayerView(fast, 50);
+
+    expect(fast.player.heading).toBeCloseTo(slow.player.heading * 2.5, 5);
+  });
+
+  it('keeps mouse-look heading normalized after large turns', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+
+    turnPlayerView(state, 5000);
+
+    expect(state.player.heading).toBeGreaterThanOrEqual(-Math.PI);
+    expect(state.player.heading).toBeLessThanOrEqual(Math.PI);
   });
 
   it('marks browser navigation keys so handlers can prevent page scrolling', () => {
@@ -136,6 +254,8 @@ describe('LoopForge game logic', () => {
 
   it('fires a shard blast from the player heading with a cooldown', () => {
     const state = createInitialState(DEFAULT_VARIANT);
+    startGame(state);
+    state.enemies = [];
     state.player.heading = 0;
 
     const fired = fireShardBlast(state);
@@ -149,8 +269,27 @@ describe('LoopForge game logic', () => {
     expect(state.player.blastCooldown).toBeGreaterThan(0);
   });
 
+  it('auto-locks shard blasts onto the nearest active judge', () => {
+    const state = createInitialState(DEFAULT_VARIANT);
+    startGame(state);
+    state.player.x = 200;
+    state.player.y = 200;
+    state.enemies[0].x = 200;
+    state.enemies[0].y = 60;
+    state.enemies[1].x = 600;
+    state.enemies[1].y = 200;
+
+    expect(fireShardBlast(state)).toBe(true);
+
+    expect(state.blasts[0].vy).toBeLessThan(0);
+    expect(Math.abs(state.blasts[0].vx)).toBeLessThan(1);
+    expect(state.message).toContain(state.enemies[0].judge.handle);
+  });
+
   it('damages and defeats judges with shard blasts for score', () => {
     const state = createInitialState(DEFAULT_VARIANT);
+    startGame(state);
+    state.graceRemaining = 0;
     const judge = state.enemies[0];
     state.player.x = 200;
     state.player.y = 200;

@@ -1,13 +1,13 @@
 # LoopForge
 
-LoopForge is a first-person Vibe Jam arena for Vibe Jam 2026: collect AI-code shards while the contest judges chase, roast, learn, and respawn.
+LoopForge is a camera-follow Vibe Jam arena for Vibe Jam 2026: collect AI-code shards while monster judges chase, roast, learn, and respawn.
 
 ## Current loop
 
-- Lightweight pseudo-FPV arcade survival
+- Lightweight camera-follow arcade survival
 - Collect cyan AI-code/vibe shards
-- Move with mouse-look plus WASD/arrow forward/back/strafe controls
-- Fire shard blasts to damage and defeat judge chasers
+- Move with WASD/arrow-key arena controls while the camera follows the player
+- Fire auto-lock shard blasts to damage and defeat judge chasers
 - Survive short waves
 - Choose a mutation/upgrade between waves
 - No login, no account, no multiplayer required for the MVP
@@ -46,11 +46,9 @@ The Vibe Jam widget is included in `index.html`:
 
 ## Controls
 
-Click the arena once to capture mouse-look. Move the mouse to aim.
+No mouse capture is required.
 
-- W or ↑: move forward
-- S or ↓: back up
-- A/D or ←/→: strafe left/right
-- Q/E: keyboard-look fallback
-- Space or click: fire a shard blast
-- Esc: release mouse capture
+- W or Up: move up
+- S or Down: move down
+- A/D or Left/Right: move left/right
+- Space or click: fire an auto-lock shard blast at the nearest active judge

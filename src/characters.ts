@@ -7,7 +7,11 @@ export type JudgeChaser = {
   name: string;
   role: string;
   color: string;
+  secondaryColor: string;
   emoji: string;
+  signal: string;
+  bossTitle: string;
+  prop: string;
   bark: string;
   sprites?: CharacterSprites;
 };
@@ -23,15 +27,30 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     name: 'Pieter',
     role: 'Organizer',
     color: '#ffcf5c',
-    emoji: '🧢',
+    secondaryColor: '#ff6f59',
+    emoji: 'LVL',
+    signal: 'LVL',
+    bossTitle: 'Instant-Ship Warden',
+    prop: 'launch timer halo',
     bark: 'No loading screens. Instant fun or instant doom!',
+    sprites: {
+      idle: '/assets/judges/levelsio/boss.png',
+      chase: '/assets/judges/levelsio/boss.png',
+      hurt: '/assets/judges/levelsio/boss.png',
+      defeated: '/assets/judges/levelsio/boss.png',
+      respawn: '/assets/judges/levelsio/boss.png',
+    },
   },
   {
     handle: '@S13K_',
     name: 'S13K',
     role: 'Lead Judge',
     color: '#ff4dca',
-    emoji: '🧑‍⚖️',
+    secondaryColor: '#7df9ff',
+    emoji: 'S13',
+    signal: 'S13',
+    bossTitle: 'Verdict Blade',
+    prop: 'scorecard saber',
     bark: 'ship it, but make the loop tighter!',
   },
   {
@@ -39,7 +58,11 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     name: 'TIMSORET',
     role: 'Game Dev',
     color: '#7df9ff',
-    emoji: '🎮',
+    secondaryColor: '#9cff8f',
+    emoji: 'TIM',
+    signal: 'TIM',
+    bossTitle: 'Juice Auditor',
+    prop: 'feel meter gauntlet',
     bark: 'Your juice budget is under review!',
   },
   {
@@ -47,7 +70,11 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     name: 'Nicola',
     role: 'Judge',
     color: '#9cff8f',
-    emoji: '🕹️',
+    secondaryColor: '#ffcf5c',
+    emoji: 'NIC',
+    signal: 'NIC',
+    bossTitle: 'Art Detector',
+    prop: 'placeholder scanner',
     bark: 'I can smell placeholder art from here!',
   },
   {
@@ -55,7 +82,11 @@ export const JUDGE_CHASERS: JudgeChaser[] = [
     name: 'Edwin',
     role: 'Judge',
     color: '#b08cff',
-    emoji: '⚡',
+    secondaryColor: '#ff4dca',
+    emoji: 'EDW',
+    signal: 'EDW',
+    bossTitle: 'Vibe Containment',
+    prop: 'voltage crown',
     bark: 'The vibes are escaping. Contain them!',
   },
 ];
